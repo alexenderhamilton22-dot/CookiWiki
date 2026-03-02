@@ -1,0 +1,71 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Sage & Terracotta palette */
+    --background: 40 25% 96%;
+    --foreground: 25 20% 15%;
+
+    --card: 40 30% 98%;
+    --card-foreground: 25 20% 15%;
+
+    --popover: 40 30% 98%;
+    --popover-foreground: 25 20% 15%;
+
+    --primary: 150 18% 42%;
+    --primary-foreground: 40 30% 98%;
+
+    --secondary: 16 55% 58%;
+    --secondary-foreground: 40 30% 98%;
+
+    --muted: 40 15% 90%;
+    --muted-foreground: 25 10% 45%;
+
+    --accent: 35 45% 88%;
+    --accent-foreground: 25 20% 15%;
+
+    --destructive: 0 65% 50%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 35 20% 85%;
+    --input: 35 20% 85%;
+    --ring: 150 18% 42%;
+
+    --radius: 0.75rem;
+
+    /* Custom tokens */
+    --sage: 150 18% 42%;
+    --sage-light: 150 15% 92%;
+    --terracotta: 16 55% 58%;
+    --terracotta-light: 16 45% 92%;
+    --warm-cream: 40 35% 95%;
+    --warm-brown: 25 30% 28%;
+
+    --font-serif: 'Playfair Display', Georgia, serif;
+    --font-sans: 'DM Sans', system-ui, sans-serif;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-family: var(--font-sans);
+  }
+
+  h1, h2, h3, h4 {
+    font-family: var(--font-serif);
+  }
+}
+
+@layer utilities {
+  .font-serif {
+    font-family: var(--font-serif);
+  }
+  .font-sans {
+    font-family: var(--font-sans);
+  }
+}
