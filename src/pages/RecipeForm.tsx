@@ -13,7 +13,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
-import { Loader2, Plus, X, Trash2, Sparkles, FileText } from 'lucide-react';
+import { Loader2, Plus, X, Trash2, Sparkles, FileText, Camera } from 'lucide-react';
 import { toast } from 'sonner';
 import type { Ingredient } from '@/types/recipe';
 
@@ -76,6 +76,8 @@ export default function RecipeForm() {
   const [pdfText, setPdfText] = useState('');
   const [pdfName, setPdfName] = useState('');
   const [isDraggingPdf, setIsDraggingPdf] = useState(false);
+  const cameraInputRef = useRef<HTMLInputElement | null>(null);
+  const [cameraPreview, setCameraPreview] = useState<string | null>(null);
 
   useEffect(() => {
     if (recipe) {
@@ -155,6 +157,7 @@ export default function RecipeForm() {
         toast.error('Impossible de lire le contenu du PDF.');
         return;
       }
+      console.log('Texte extrait du PDF :', text);
       setPdfText(text);
     };
     reader.readAsText(file);
@@ -301,36 +304,54 @@ export default function RecipeForm() {
   };
 
   const handleTextAnalyze = async (merge: boolean) => {
-    if (!importText.trim()) {
+    const trimmed = importText.trim();
+    if (!trimmed) {
       toast.error('Merci de coller un texte de recette.');
+      return;
+    }
+    if (trimmed.length < 50) {
+      toast.error("Le texte est trop court ou incomplet pour extraire une recette.");
       return;
     }
     setIsAnalyzing(true);
     try {
-      const analyzed = await analyzeRecipeText(importText.trim());
+      const analyzed = await analyzeRecipeText(trimmed);
       updateForm(analyzed, merge);
       toast.success('Texte structuré en recette !');
     } catch (err: any) {
       console.error(err);
-      toast.error("Impossible d'analyser ce texte avec l'IA.");
+      if (typeof err?.message === 'string' && err.message === 'NO_RECIPE_FOUND') {
+        toast.error("Aucune recette n'a été trouvée dans ce texte. L'IA n'a rien inventé.");
+      } else {
+        toast.error("Impossible d'analyser ce texte avec l'IA.");
+      }
     } finally {
       setIsAnalyzing(false);
     }
   };
 
   const handlePdfAnalyze = async (merge: boolean) => {
-    if (!pdfText.trim()) {
+    const trimmed = pdfText.trim();
+    if (!trimmed) {
       toast.error('Merci de déposer ou sélectionner un PDF de recette.');
+      return;
+    }
+    if (trimmed.length < 50) {
+      toast.error('Le PDF semble illisible ou trop court pour contenir une recette exploitable.');
       return;
     }
     setIsAnalyzing(true);
     try {
-      const analyzed = await analyzeRecipeText(pdfText.trim());
+      const analyzed = await analyzeRecipeText(trimmed);
       updateForm(analyzed, merge);
       toast.success('PDF analysé et structuré en recette !');
     } catch (err: any) {
       console.error(err);
-      toast.error("Impossible d'analyser ce PDF avec l'IA.");
+      if (typeof err?.message === 'string' && err.message === 'NO_RECIPE_FOUND') {
+        toast.error("Aucune recette n'a été trouvée dans ce PDF. L'IA n'a rien inventé.");
+      } else {
+        toast.error("Impossible d'analyser ce PDF avec l'IA.");
+      }
     } finally {
       setIsAnalyzing(false);
     }
@@ -654,6 +675,31 @@ export default function RecipeForm() {
                       handlePdfFile(file);
                     }}
                   />
+                <input
+                  ref={cameraInputRef}
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  className="hidden"
+                  onChange={async (e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    const objectUrl = URL.createObjectURL(file);
+                    setCameraPreview(objectUrl);
+                    setRawFile(file);
+                    setIsAnalyzing(true);
+                    try {
+                      const analyzed = await analyzeRecipeImage(file);
+                      updateForm(analyzed, !formIsEmpty);
+                      toast.success('Recette extraite depuis la photo !');
+                    } catch (err) {
+                      console.error(err);
+                      toast.error("Impossible d'analyser la photo avec l'IA.");
+                    } finally {
+                      setIsAnalyzing(false);
+                    }
+                  }}
+                />
                   <Button
                     type="button"
                     variant="outline"
@@ -665,12 +711,33 @@ export default function RecipeForm() {
                     <FileText className="h-4 w-4" />
                     <span>Importer un PDF</span>
                   </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="gap-1"
+                  onClick={() => cameraInputRef.current?.click()}
+                  disabled={isAnalyzing}
+                >
+                  <Camera className="h-4 w-4" />
+                  <span>Prendre une photo</span>
+                </Button>
                   {pdfName && (
                     <span className="inline-flex items-center gap-1 rounded-md bg-muted px-2 py-1 text-xs text-muted-foreground">
                       <FileText className="h-3 w-3" />
                       <span className="truncate max-w-[180px]">{pdfName}</span>
                     </span>
                   )}
+                {cameraPreview && (
+                  <div className="inline-flex items-center gap-1 rounded-md bg-muted px-1 py-1 text-xs text-muted-foreground">
+                    <img
+                      src={cameraPreview}
+                      alt="Photo de la recette"
+                      className="h-10 w-10 rounded object-cover"
+                    />
+                    <span className="whitespace-nowrap">Photo capturée</span>
+                  </div>
+                )}
                 </div>
               </div>
               <div className="flex flex-wrap gap-2 pt-1">

@@ -53,9 +53,12 @@ function extractJson(text: string): string {
 }
 
 const BASE_JSON_FORMAT = `
-Tu es une IA spécialisée dans l'analyse de recettes de cuisine.
+Tu es un expert en cuisine. Ta mission est STRICTEMENT d'extraire la recette présente dans le texte fourni.
 
-Tu dois toujours renvoyer STRICTEMENT un JSON valide (pas de markdown, pas de texte autour) au format suivant :
+Si le texte ou le document ne contient pas de recette exploitable (ingrédients + étapes), tu dois répondre UNIQUEMENT :
+NO_RECIPE_FOUND
+
+Sinon, tu dois toujours renvoyer STRICTEMENT un JSON valide (pas de markdown, pas de texte autour) au format suivant :
 {
   "title": "Titre de la recette",
   "description": "Courte description de la recette si disponible, sinon une phrase synthétique",
@@ -86,6 +89,7 @@ Règles importantes :
 - Les instructions doivent être découpées en étapes claires dans un tableau.
 - Le champ "tags" doit être un tableau de chaînes décrivant au minimum le type de plat, la difficulté et, si possible, le régime ou une caractéristique comme "rapide" ou "batch cooking".
 - Ne renvoie AUCUN autre texte que le JSON.
+- N'invente JAMAIS de recette ni de contenu : si la source n'est pas une vraie recette, réponds simplement NO_RECIPE_FOUND.
 `;
 
 export async function analyzeRecipeImage(file: File): Promise<AnalyzedRecipe> {
@@ -105,7 +109,9 @@ export async function analyzeRecipeImage(file: File): Promise<AnalyzedRecipe> {
   const prompt = `
 ${BASE_JSON_FORMAT}
 
-Source : photo (photo de fiche, capture d'écran, etc.).
+Source : photo (photo de fiche, capture d'écran, photo d'une recette papier prise au smartphone, etc.).
+
+Ceci est la photo d'une recette de cuisine. Extrais le titre, la liste des ingrédients et les étapes de préparation pour remplir un formulaire de recette.
 Analyse l'image fournie et renvoie le JSON décrit ci-dessus.
 `;
 
@@ -176,6 +182,11 @@ Analyse ce texte pour extraire la recette complète et renvoie le JSON décrit c
   const result = await model.generateContent([prompt]);
   const responseText = result.response.text();
   const jsonString = extractJson(responseText);
+
+  const trimmed = jsonString.trim();
+  if (trimmed === 'NO_RECIPE_FOUND') {
+    throw new Error('NO_RECIPE_FOUND');
+  }
 
   try {
     const parsed = JSON.parse(jsonString);
