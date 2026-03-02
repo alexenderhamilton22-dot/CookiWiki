@@ -11,11 +11,13 @@ interface Props {
 
 export default function RecipeCard({ recipe, onDelete }: Props) {
   const totalTime = (recipe.prep_time || 0) + (recipe.cook_time || 0);
+  const authorTag = recipe.tags?.find((t) => t.toLowerCase().startsWith('auteur:'));
+  const authorName = authorTag ? authorTag.split(':').slice(1).join(':').trim() : '';
 
   return (
     <div className="group relative overflow-hidden rounded-lg border border-border bg-card shadow-sm transition-all hover:shadow-md animate-fade-in">
       <Link to={`/recette/${recipe.id}`} className="block">
-        <div className="aspect-[4/3] overflow-hidden bg-muted">
+        <div className="relative aspect-[4/3] overflow-hidden bg-muted">
           {recipe.image_url ? (
             <img
               src={recipe.image_url}
@@ -27,6 +29,11 @@ export default function RecipeCard({ recipe, onDelete }: Props) {
             <div className="flex h-full items-center justify-center text-muted-foreground">
               <span className="font-serif text-4xl">🍽</span>
             </div>
+          )}
+          {authorName && (
+            <span className="absolute left-2 top-2 rounded-md bg-black/60 px-2 py-1 text-[10px] font-medium text-amber-50">
+              {authorName}
+            </span>
           )}
         </div>
         <div className="p-3">

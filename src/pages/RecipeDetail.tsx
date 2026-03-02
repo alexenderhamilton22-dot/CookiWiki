@@ -107,6 +107,8 @@ export default function RecipeDetail() {
   }
 
   const totalTime = (recipe.prep_time || 0) + (recipe.cook_time || 0);
+  const authorTag = recipe.tags?.find((t) => t.toLowerCase().startsWith('auteur:'));
+  const authorName = authorTag ? authorTag.split(':').slice(1).join(':').trim() : '';
 
   return (
     <div className={`min-h-screen ${cookingMode ? 'bg-card' : 'bg-background'}`}>
@@ -119,6 +121,11 @@ export default function RecipeDetail() {
               alt={recipe.title}
               className="w-full aspect-video object-cover rounded-lg"
             />
+            {authorName && (
+              <span className="absolute left-2 top-2 rounded-md bg-black/60 px-2 py-1 text-xs font-medium text-amber-50">
+                {authorName}
+              </span>
+            )}
             {user && (
               <>
                 <input
@@ -231,7 +238,11 @@ export default function RecipeDetail() {
 
         <div className="space-y-3">
           <h3 className="font-serif text-lg font-semibold">Instructions</h3>
-          <div className={`prose prose-sm max-w-none whitespace-pre-wrap text-foreground ${cookingMode ? 'text-lg leading-relaxed' : ''}`}>
+          <div
+            className={`prose max-w-none whitespace-pre-wrap text-foreground ${
+              cookingMode ? 'prose-lg text-xl leading-relaxed' : 'prose-sm'
+            }`}
+          >
             {recipe.instructions}
           </div>
         </div>

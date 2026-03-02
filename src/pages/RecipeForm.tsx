@@ -49,6 +49,11 @@ export default function RecipeForm() {
   const { user } = useAuth();
   const { recipe, loading: loadingRecipe } = useRecipe(isEdit ? id : undefined);
 
+  const displayName =
+    (user?.user_metadata as any)?.username ||
+    (user?.email ? user.email.split('@')[0] : '') ||
+    '';
+
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [instructions, setInstructions] = useState('');
@@ -118,6 +123,13 @@ export default function RecipeForm() {
       .map((t) => t.trim().toLowerCase())
       .filter(Boolean);
     return Array.from(new Set(normalized));
+  };
+
+  const ensureAuthorTag = (incomingTags: string[]) => {
+    const tagsList = Array.isArray(incomingTags) ? incomingTags : [];
+    const hasAuthor = tagsList.some((t) => t.toLowerCase().startsWith('auteur:'));
+    if (hasAuthor || !displayName) return tagsList;
+    return [...tagsList, `auteur:${displayName}`];
   };
 
   const normalizeDifficulty = (value?: string | null): Difficulty | undefined => {
@@ -199,7 +211,7 @@ export default function RecipeForm() {
       }
 
       const newTags = normalizeTags(data.tags);
-      if (newTags.length) setTags(newTags);
+      if (newTags.length) setTags(ensureAuthorTag(newTags));
     } else {
       if (data.title && !title) setTitle(data.title);
       if (data.description && !description) setDescription(data.description);
@@ -250,7 +262,7 @@ export default function RecipeForm() {
 
       const incomingTags = normalizeTags(data.tags);
       if (incomingTags.length) {
-        setTags((prev) => Array.from(new Set([...prev, ...incomingTags])));
+        setTags((prev) => ensureAuthorTag(Array.from(new Set([...prev, ...incomingTags]))));
       }
     }
   };
@@ -338,6 +350,8 @@ export default function RecipeForm() {
     setSaving(true);
 
     const validIngredients = ingredients.filter((ing) => ing.name.trim());
+    const tagsWithAuthor = ensureAuthorTag(tags);
+
     const basePayload = {
       title,
       description: description || null,
@@ -346,7 +360,7 @@ export default function RecipeForm() {
       cook_time: cookTime,
       servings,
       difficulty: difficulty || null,
-      tags,
+      tags: tagsWithAuthor,
       image_url: imageUrl,
       ingredients: validIngredients,
       updated_at: new Date().toISOString(),
