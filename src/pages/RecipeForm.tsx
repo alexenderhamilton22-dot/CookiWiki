@@ -515,6 +515,30 @@ export default function RecipeForm() {
                 Conseil : Utilisez le mode Panorama pour les recettes sur plusieurs pages.
               </p>
 
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="gap-1"
+                  onClick={() => cameraInputRef.current?.click()}
+                  disabled={isAnalyzing}
+                >
+                  <Camera className="h-4 w-4" />
+                  <span>Prendre une photo</span>
+                </Button>
+                {cameraPreview && (
+                  <div className="inline-flex items-center gap-1 rounded-md bg-muted px-1 py-1 text-xs text-muted-foreground">
+                    <img
+                      src={cameraPreview}
+                      alt="Photo de la recette"
+                      className="h-10 w-10 rounded object-cover"
+                    />
+                    <span className="whitespace-nowrap">Photo capturée</span>
+                  </div>
+                )}
+              </div>
+
               {(rawFile || importUrl) && (
                 <div className="flex flex-wrap gap-2 pt-1">
                   {formIsEmpty ? (
