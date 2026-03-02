@@ -3,6 +3,17 @@
   "short_name": "CookiWiki",
   "start_url": "/",
   "display": "standalone",
+  "icons": [
+    { "src": "/favicon.ico", "sizes": "64x64", "type": "image/x-icon" },
+    { "src": "/logo192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/logo512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}
+{
+  "name": "CookiWiki",
+  "short_name": "CookiWiki",
+  "start_url": "/",
+  "display": "standalone",
   "background_color": "#ffffff",
   "theme_color": "#f97316",
   "icons": [
