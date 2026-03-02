@@ -2,6 +2,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import { LogOut, Plus } from 'lucide-react';
+import HelpMenu from '@/components/HelpMenu';
 
 export default function Header() {
   const { user, signOut } = useAuth();
@@ -15,12 +16,15 @@ export default function Header() {
   return (
     <header className="sticky top-0 z-50 border-b border-border bg-card/80 backdrop-blur-sm">
       <div className="container flex h-14 items-center justify-between">
-        <Link to="/" className="flex items-center gap-2">
+        <Link to="/" className="flex items-center gap-3">
           <img
             src="/logo_CookiWik.png"
             alt="CookiWiki"
-            className="h-32 w-auto"
+            className="h-32 w-auto mt-4"
           />
+          <span className="hidden text-xs font-serif tracking-[0.18em] uppercase text-amber-600 md:inline">
+            Les Recettes de MAMIFA
+          </span>
         </Link>
         <div className="flex items-center gap-3">
           {user && displayName && (
@@ -42,6 +46,7 @@ export default function Header() {
               Se connecter
             </Button>
           )}
+          <HelpMenu />
         </div>
       </div>
     </header>

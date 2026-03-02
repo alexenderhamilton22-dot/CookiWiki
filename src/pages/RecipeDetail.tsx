@@ -31,6 +31,63 @@ export default function RecipeDetail() {
     return () => { wakeLock?.release(); };
   }, [cookingMode]);
 
+  async function handlePastedImage(file: File) {
+    if (!recipe || !recipe.id) return;
+    setUpdatingImage(true);
+    try {
+      toast.loading('Mise à jour de la photo...', { id: 'update-photo' });
+
+      const compressed = (await imageCompression(file, {
+        maxSizeMB: 0.8,
+        maxWidthOrHeight: 1200,
+        useWebWorker: true,
+      })) as File;
+
+      const ext = compressed.type === 'image/png' ? 'png' : 'jpg';
+      const path = `${crypto.randomUUID()}.${ext}`;
+
+      const { error: uploadError } = await supabase.storage.from('recipe-photos').upload(path, compressed);
+      if (uploadError) throw uploadError;
+
+      const { data } = supabase.storage.from('recipe-photos').getPublicUrl(path);
+      const publicUrl = data.publicUrl;
+
+      const { error: dbError } = await supabase
+        .from('recipes')
+        .update({
+          image_url: publicUrl,
+          last_modified_by: user?.id ?? null,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', recipe.id);
+
+      if (dbError) throw dbError;
+
+      setImageOverride(publicUrl);
+      toast.success('La photo a été mise à jour !', { id: 'update-photo' });
+    } catch (err) {
+      console.error(err);
+      toast.error("Échec de la mise à jour de l'image.", { id: 'update-photo' });
+    } finally {
+      setUpdatingImage(false);
+    }
+  }
+
+  useEffect(() => {
+    const onPaste = (event: ClipboardEvent) => {
+      const items = Array.from(event.clipboardData?.items || []);
+      const imageItem = items.find((item) => item.type.startsWith('image/'));
+      if (!imageItem) return;
+      const file = imageItem.getAsFile();
+      if (!file) return;
+      event.preventDefault();
+      void handlePastedImage(file);
+    };
+
+    window.addEventListener('paste', onPaste);
+    return () => window.removeEventListener('paste', onPaste);
+  }, [recipe?.id, user?.id]);
+
   if (loading) {
     return (
       <div className="min-h-screen bg-background">

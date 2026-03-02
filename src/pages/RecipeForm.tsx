@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useRecipe } from '@/hooks/useRecipes';
@@ -6,13 +6,14 @@ import { supabase } from '@/lib/supabase';
 import { analyzeRecipeImage, analyzeRecipeUrl, analyzeRecipeText, type AnalyzedRecipe, type Difficulty } from '@/lib/gemini';
 import Header from '@/components/Header';
 import ImageUpload from '@/components/ImageUpload';
+import imageCompression from 'browser-image-compression';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
-import { Loader2, Plus, X, Trash2, Sparkles } from 'lucide-react';
+import { Loader2, Plus, X, Trash2, Sparkles, FileText } from 'lucide-react';
 import { toast } from 'sonner';
 import type { Ingredient } from '@/types/recipe';
 
@@ -61,10 +62,15 @@ export default function RecipeForm() {
   const [ingredients, setIngredients] = useState<Ingredient[]>([{ name: '', qty: 0, unit: 'g' }]);
   const [saving, setSaving] = useState(false);
   const [rawFile, setRawFile] = useState<File | null>(null);
+  const [hasManualImage, setHasManualImage] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [importUrl, setImportUrl] = useState('');
   const [importText, setImportText] = useState('');
   const [activeTab, setActiveTab] = useState<'photo' | 'url' | 'text'>('photo');
+  const pdfInputRef = useRef<HTMLInputElement | null>(null);
+  const [pdfText, setPdfText] = useState('');
+  const [pdfName, setPdfName] = useState('');
+  const [isDraggingPdf, setIsDraggingPdf] = useState(false);
 
   useEffect(() => {
     if (recipe) {
@@ -122,6 +128,24 @@ export default function RecipeForm() {
     if (v === 'moyen' || v === 'medium') return 'Moyen';
     if (v === 'difficile' || v === 'hard') return 'Difficile';
     return undefined;
+  };
+
+  const handlePdfFile = (file: File) => {
+    if (file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf')) {
+      toast.error('Merci de déposer un fichier PDF.');
+      return;
+    }
+    setPdfName(file.name);
+    const reader = new FileReader();
+    reader.onload = () => {
+      const text = typeof reader.result === 'string' ? reader.result : '';
+      if (!text.trim()) {
+        toast.error('Impossible de lire le contenu du PDF.');
+        return;
+      }
+      setPdfText(text);
+    };
+    reader.readAsText(file);
   };
 
   const updateForm = (data: AnalyzedRecipe, merge: boolean) => {
@@ -282,6 +306,24 @@ export default function RecipeForm() {
     }
   };
 
+  const handlePdfAnalyze = async (merge: boolean) => {
+    if (!pdfText.trim()) {
+      toast.error('Merci de déposer ou sélectionner un PDF de recette.');
+      return;
+    }
+    setIsAnalyzing(true);
+    try {
+      const analyzed = await analyzeRecipeText(pdfText.trim());
+      updateForm(analyzed, merge);
+      toast.success('PDF analysé et structuré en recette !');
+    } catch (err: any) {
+      console.error(err);
+      toast.error("Impossible d'analyser ce PDF avec l'IA.");
+    } finally {
+      setIsAnalyzing(false);
+    }
+  };
+
   const addTag = () => {
     const t = tagInput.trim().toLowerCase();
     if (t && !tags.includes(t)) {
@@ -326,6 +368,65 @@ export default function RecipeForm() {
     setSaving(false);
   };
 
+  async function handlePastedImage(file: File) {
+    try {
+      toast.loading('Image collée, traitement en cours...', { id: 'paste-image' });
+
+      const compressed = (await imageCompression(file, {
+        maxSizeMB: 0.8,
+        maxWidthOrHeight: 1200,
+        useWebWorker: true,
+      })) as File;
+
+      const ext = compressed.type === 'image/png' ? 'png' : 'jpg';
+      const path = `${crypto.randomUUID()}.${ext}`;
+
+      const { error: uploadError } = await supabase.storage.from('recipe-photos').upload(path, compressed);
+      if (uploadError) throw uploadError;
+
+      const { data } = supabase.storage.from('recipe-photos').getPublicUrl(path);
+      const url = data.publicUrl;
+
+      setImageUrl(url);
+      setRawFile(compressed);
+      setHasManualImage(true);
+
+      toast.success('Image collée avec succès !', { id: 'paste-image' });
+    } catch (err: any) {
+      console.error(err);
+      toast.error("Impossible d'utiliser l'image du presse-papiers.", { id: 'paste-image' });
+    }
+  }
+
+  const handlePaste = (e: React.ClipboardEvent<HTMLFormElement>) => {
+    const items = Array.from(e.clipboardData.items || []);
+    const imageItem = items.find((item) => item.type.startsWith('image/'));
+    if (!imageItem) return;
+
+    const file = imageItem.getAsFile();
+    if (!file) return;
+
+    e.preventDefault();
+    void handlePastedImage(file);
+  };
+
+  useEffect(() => {
+    const onPaste = (event: ClipboardEvent) => {
+      const items = Array.from(event.clipboardData?.items || []);
+      const imageItem = items.find((item) => item.type.startsWith('image/'));
+      if (!imageItem) return;
+
+      const file = imageItem.getAsFile();
+      if (!file) return;
+
+      event.preventDefault();
+      void handlePastedImage(file);
+    };
+
+    window.addEventListener('paste', onPaste);
+    return () => window.removeEventListener('paste', onPaste);
+  }, []);
+
   if (isEdit && loadingRecipe) {
     return (
       <div className="min-h-screen bg-background">
@@ -338,10 +439,21 @@ export default function RecipeForm() {
   return (
     <div className="min-h-screen bg-background">
       <Header />
-      <main className="container max-w-2xl py-6">
+      <main className="container max-w-2xl py-6 relative">
+        {isAnalyzing && (
+          <div className="absolute inset-0 z-20 flex flex-col items-center justify-center rounded-lg bg-background/80 backdrop-blur-sm">
+            <div className="flex flex-col items-center gap-3 rounded-full border border-amber-200/70 bg-amber-50/80 px-6 py-4 shadow-sm">
+              <Loader2 className="h-6 w-6 animate-spin text-amber-500" />
+              <p className="text-xs sm:text-sm font-serif tracking-[0.18em] uppercase text-amber-700 text-center">
+                MAMIFA déchiffre votre recette...
+              </p>
+            </div>
+          </div>
+        )}
+
         <h1 className="text-2xl font-bold mb-6">{isEdit ? 'Modifier la recette' : 'Nouvelle recette'}</h1>
 
-        <form onSubmit={handleSubmit} className="space-y-6">
+        <form onSubmit={handleSubmit} onPaste={handlePaste} className="space-y-6 relative z-10">
           <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'photo' | 'url' | 'text')} className="space-y-4">
             <TabsList className="grid grid-cols-3 w-full">
               <TabsTrigger value="photo" className="flex items-center gap-2">
@@ -361,6 +473,7 @@ export default function RecipeForm() {
                 onUploaded={(url, file) => {
                   setImageUrl(url);
                   setRawFile(file);
+                  setHasManualImage(true);
                 }}
               />
               <p className="text-xs text-muted-foreground">
@@ -484,13 +597,68 @@ export default function RecipeForm() {
 
             <TabsContent value="text" className="space-y-2">
               <Label htmlFor="import-text">Texte brut de la recette</Label>
-              <Textarea
-                id="import-text"
-                rows={5}
-                placeholder="Collez ici une recette copiée d'un site, d'un PDF ou d'une note..."
-                value={importText}
-                onChange={(e) => setImportText(e.target.value)}
-              />
+              <div
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  setIsDraggingPdf(true);
+                }}
+                onDragLeave={(e) => {
+                  e.preventDefault();
+                  setIsDraggingPdf(false);
+                }}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  setIsDraggingPdf(false);
+                  const file = Array.from(e.dataTransfer.files || []).find(
+                    (f) => f.type === 'application/pdf' || f.name.toLowerCase().endsWith('.pdf'),
+                  );
+                  if (file) {
+                    handlePdfFile(file);
+                  }
+                }}
+                className={`rounded-md border p-3 transition-colors ${
+                  isDraggingPdf ? 'border-dashed border-amber-500 bg-amber-50/60' : 'border-border bg-background'
+                }`}
+              >
+                <Textarea
+                  id="import-text"
+                  rows={5}
+                  placeholder="Collez ici une recette copiée d'un site, d'un PDF ou d'une note...&#10;Vous pouvez aussi glisser-déposer un PDF dans cette zone."
+                  value={importText}
+                  onChange={(e) => setImportText(e.target.value)}
+                  className="bg-transparent"
+                />
+                <div className="mt-2 flex flex-wrap items-center gap-2">
+                  <input
+                    ref={pdfInputRef}
+                    type="file"
+                    accept="application/pdf"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      handlePdfFile(file);
+                    }}
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="gap-1"
+                    onClick={() => pdfInputRef.current?.click()}
+                    disabled={isAnalyzing}
+                  >
+                    <FileText className="h-4 w-4" />
+                    <span>Importer un PDF</span>
+                  </Button>
+                  {pdfName && (
+                    <span className="inline-flex items-center gap-1 rounded-md bg-muted px-2 py-1 text-xs text-muted-foreground">
+                      <FileText className="h-3 w-3" />
+                      <span className="truncate max-w-[180px]">{pdfName}</span>
+                    </span>
+                  )}
+                </div>
+              </div>
               <div className="flex flex-wrap gap-2 pt-1">
                 {formIsEmpty ? (
                   <Button
@@ -539,13 +707,41 @@ export default function RecipeForm() {
                     </Button>
                   </>
                 )}
+                {pdfText && (
+                  <>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="gap-1"
+                      onClick={() => handlePdfAnalyze(false)}
+                      disabled={isAnalyzing}
+                    >
+                      <Sparkles className="h-4 w-4" />
+                      <span>Analyser le PDF</span>
+                    </Button>
+                    {!formIsEmpty && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="gap-1"
+                        onClick={() => handlePdfAnalyze(true)}
+                        disabled={isAnalyzing}
+                      >
+                        <Sparkles className="h-4 w-4" />
+                        <span>Compléter depuis le PDF</span>
+                      </Button>
+                    )}
+                  </>
+                )}
               </div>
             </TabsContent>
           </Tabs>
 
           {imageUrl && (
             <div className="flex items-center gap-3">
-              <div className="h-14 w-14 overflow-hidden rounded-md border border-border bg-muted">
+              <div className="relative h-14 w-14 overflow-hidden rounded-md border border-border bg-muted">
                 <img
                   src={imageUrl || getPlaceholderImage(tags)}
                   alt="Aperçu de la recette"
@@ -554,6 +750,12 @@ export default function RecipeForm() {
                     e.currentTarget.src = getPlaceholderImage(tags);
                   }}
                 />
+                {user && (
+                  <span className="absolute left-0 top-0 rounded-br-md bg-black/65 px-1 py-0.5 text-[9px] font-medium text-amber-50">
+                    {(user.user_metadata as any)?.username ||
+                      (user.email ? user.email.split('@')[0] : '')}
+                  </span>
+                )}
               </div>
               <span className="text-xs text-muted-foreground break-all">
                 Image prête : {imageUrl}
@@ -669,8 +871,8 @@ export default function RecipeForm() {
             )}
           </div>
 
-          <Button type="submit" className="w-full" disabled={saving}>
-            {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+          <Button type="submit" className="w-full" disabled={saving || isAnalyzing}>
+            {(saving || isAnalyzing) && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             {isEdit ? 'Enregistrer les modifications' : 'Publier la recette'}
           </Button>
         </form>
