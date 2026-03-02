@@ -18,7 +18,7 @@ const Index = () => {
       <main className="container py-6 space-y-6">
         <div className="text-center space-y-1">
           <h1 className="text-3xl font-bold text-foreground">CookiWiki</h1>
-          <p className="text-muted-foreground">Les recettes de notre famille 🍳</p>
+          <p className="text-muted-foreground">Les recettes de MAMIFA 🍳</p>
         </div>
 
         <RecipeFilters recipes={recipes} onFiltered={handleFiltered} />

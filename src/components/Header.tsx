@@ -1,20 +1,33 @@
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
-import { LogOut, Plus, ChefHat } from 'lucide-react';
+import { LogOut, Plus } from 'lucide-react';
 
 export default function Header() {
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
 
+  const displayName =
+    (user?.user_metadata as any)?.username ||
+    (user?.email ? user.email.split('@')[0] : '') ||
+    '';
+
   return (
     <header className="sticky top-0 z-50 border-b border-border bg-card/80 backdrop-blur-sm">
       <div className="container flex h-14 items-center justify-between">
         <Link to="/" className="flex items-center gap-2">
-          <ChefHat className="h-6 w-6 text-secondary" />
-          <span className="font-serif text-xl font-bold text-foreground">CookiWiki</span>
+          <img
+            src="/logo_CookiWik.png"
+            alt="CookiWiki"
+            className="h-32 w-auto"
+          />
         </Link>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3">
+          {user && displayName && (
+            <span className="hidden text-sm text-muted-foreground sm:inline">
+              {displayName}
+            </span>
+          )}
           {user ? (
             <>
               <Button size="sm" onClick={() => navigate('/recette/nouvelle')} className="gap-1">

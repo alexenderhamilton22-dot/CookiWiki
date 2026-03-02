@@ -1,13 +1,16 @@
 import { useParams, useNavigate } from 'react-router-dom';
+import { useState, useEffect, useRef } from 'react';
+import { Clock, Edit, ChefHat, Loader2, Plus } from 'lucide-react';
+import imageCompression from 'browser-image-compression';
 import { useRecipe } from '@/hooks/useRecipes';
 import { useAuth } from '@/hooks/useAuth';
+import { supabase } from '@/lib/supabase';
 import Header from '@/components/Header';
 import IngredientsList from '@/components/IngredientsList';
 import CommentSection from '@/components/CommentSection';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Clock, Edit, ChefHat, Loader2 } from 'lucide-react';
-import { useState, useEffect } from 'react';
+import { toast } from 'sonner';
 
 export default function RecipeDetail() {
   const { id } = useParams();
@@ -15,6 +18,9 @@ export default function RecipeDetail() {
   const { recipe, loading } = useRecipe(id);
   const { user } = useAuth();
   const [cookingMode, setCookingMode] = useState(false);
+  const [updatingImage, setUpdatingImage] = useState(false);
+  const [imageOverride, setImageOverride] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   // Wake Lock for cooking mode
   useEffect(() => {
@@ -49,8 +55,78 @@ export default function RecipeDetail() {
     <div className={`min-h-screen ${cookingMode ? 'bg-card' : 'bg-background'}`}>
       <Header />
       <main className="container max-w-2xl py-6 space-y-6">
-        {recipe.image_url && (
-          <img src={recipe.image_url} alt={recipe.title} className="w-full aspect-video object-cover rounded-lg" />
+        {(imageOverride || recipe.image_url) && (
+          <div className="relative w-full">
+            <img
+              src={imageOverride || recipe.image_url || ''}
+              alt={recipe.title}
+              className="w-full aspect-video object-cover rounded-lg"
+            />
+            {user && (
+              <>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={async (e) => {
+                    const file = e.target.files?.[0];
+                    if (!file || !id) return;
+                    setUpdatingImage(true);
+                    try {
+                      const compressed = (await imageCompression(file, {
+                        maxSizeMB: 0.8,
+                        maxWidthOrHeight: 1200,
+                        useWebWorker: true,
+                      })) as File;
+                      const ext = compressed.type === 'image/png' ? 'png' : 'jpg';
+                      const path = `${crypto.randomUUID()}.${ext}`;
+                      const { error: uploadError } = await supabase.storage
+                        .from('recipe-photos')
+                        .upload(path, compressed);
+                      if (uploadError) throw uploadError;
+
+                      const { data } = supabase.storage.from('recipe-photos').getPublicUrl(path);
+                      const url = data.publicUrl;
+
+                      const { error: updateError } = await supabase
+                        .from('recipes')
+                        .update({
+                          image_url: url,
+                          last_modified_by: user.id,
+                          updated_at: new Date().toISOString(),
+                        })
+                        .eq('id', id);
+
+                      if (updateError) throw updateError;
+
+                      setImageOverride(url);
+                      toast.success('Image mise à jour !');
+                    } catch (err: any) {
+                      console.error(err);
+                      toast.error("Impossible de mettre à jour l'image.");
+                    } finally {
+                      setUpdatingImage(false);
+                      if (e.target) e.target.value = '';
+                    }
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="absolute right-2 top-2 inline-flex h-8 w-8 items-center justify-center rounded-full bg-black/60 text-white shadow hover:bg-black/80 transition"
+                  aria-label="Changer l'image"
+                  disabled={updatingImage}
+                >
+                  {updatingImage ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Plus className="h-4 w-4" />
+                  )}
+                </button>
+              </>
+            )}
+          </div>
         )}
 
         <div className="space-y-3">
