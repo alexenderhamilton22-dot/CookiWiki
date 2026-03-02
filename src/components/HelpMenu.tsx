@@ -98,6 +98,18 @@ export default function HelpMenu() {
               <span className="italic">poisson</span>...).
             </p>
           </section>
+
+          <section className="space-y-1.5">
+            <h2 className="font-serif text-sm font-semibold tracking-[0.12em] uppercase text-amber-600">
+              👁️ Écran actif
+            </h2>
+            <p>
+              Quand vous voyez <span className="font-medium">Écran actif</span> sur une recette, CookiWiki demande au
+              téléphone de <span className="font-medium">garder l&apos;écran allumé</span> pendant la consultation (pratique
+              en cuisine). Si votre navigateur ne supporte pas cette option, rien ne casse&nbsp;: l&apos;app fonctionne
+              normalement.
+            </p>
+          </section>
         </div>
 
         <div className="mt-4 flex justify-end sticky bottom-0 bg-[#fffdf8] pt-3 border-t border-amber-100">
