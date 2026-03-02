@@ -76,7 +76,6 @@ export default function RecipeForm() {
   const [pdfText, setPdfText] = useState('');
   const [pdfName, setPdfName] = useState('');
   const [isDraggingPdf, setIsDraggingPdf] = useState(false);
-  const cameraInputRef = useRef<HTMLInputElement | null>(null);
   const [cameraPreview, setCameraPreview] = useState<string | null>(null);
 
   useEffect(() => {
@@ -161,6 +160,28 @@ export default function RecipeForm() {
       setPdfText(text);
     };
     reader.readAsText(file);
+  };
+
+  const handleCameraCaptureChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const objectUrl = URL.createObjectURL(file);
+    setCameraPreview(objectUrl);
+    setRawFile(file);
+    setHasManualImage(true);
+
+    setIsAnalyzing(true);
+    try {
+      const analyzed = await analyzeRecipeImage(file);
+      updateForm(analyzed, !formIsEmpty);
+      toast.success('Recette extraite depuis la photo !');
+    } catch (err) {
+      console.error(err);
+      toast.error("Impossible d'analyser la photo avec l'IA.");
+    } finally {
+      setIsAnalyzing(false);
+    }
   };
 
   const updateForm = (data: AnalyzedRecipe, merge: boolean) => {
@@ -489,6 +510,14 @@ export default function RecipeForm() {
         <h1 className="text-2xl font-bold mb-6">{isEdit ? 'Modifier la recette' : 'Nouvelle recette'}</h1>
 
         <form onSubmit={handleSubmit} onPaste={handlePaste} className="space-y-6 relative z-10">
+          <input
+            id="camera-capture"
+            type="file"
+            accept="image/*"
+            capture="environment"
+            className="hidden"
+            onChange={handleCameraCaptureChange}
+          />
           <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'photo' | 'url' | 'text')} className="space-y-4">
             <TabsList className="grid grid-cols-3 w-full">
               <TabsTrigger value="photo" className="flex items-center gap-2">
@@ -516,16 +545,11 @@ export default function RecipeForm() {
               </p>
 
               <div className="mt-2 flex flex-wrap items-center gap-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="gap-1"
-                  onClick={() => cameraInputRef.current?.click()}
-                  disabled={isAnalyzing}
-                >
-                  <Camera className="h-4 w-4" />
-                  <span>Prendre une photo</span>
+                <Button type="button" variant="outline" size="sm" className="gap-1" asChild disabled={isAnalyzing}>
+                  <label htmlFor="camera-capture" className="flex items-center gap-1 cursor-pointer">
+                    <Camera className="h-4 w-4" />
+                    <span>Prendre une photo</span>
+                  </label>
                 </Button>
                 {cameraPreview && (
                   <div className="inline-flex items-center gap-1 rounded-md bg-muted px-1 py-1 text-xs text-muted-foreground">
@@ -699,31 +723,6 @@ export default function RecipeForm() {
                       handlePdfFile(file);
                     }}
                   />
-                <input
-                  ref={cameraInputRef}
-                  type="file"
-                  accept="image/*"
-                  capture="environment"
-                  className="hidden"
-                  onChange={async (e) => {
-                    const file = e.target.files?.[0];
-                    if (!file) return;
-                    const objectUrl = URL.createObjectURL(file);
-                    setCameraPreview(objectUrl);
-                    setRawFile(file);
-                    setIsAnalyzing(true);
-                    try {
-                      const analyzed = await analyzeRecipeImage(file);
-                      updateForm(analyzed, !formIsEmpty);
-                      toast.success('Recette extraite depuis la photo !');
-                    } catch (err) {
-                      console.error(err);
-                      toast.error("Impossible d'analyser la photo avec l'IA.");
-                    } finally {
-                      setIsAnalyzing(false);
-                    }
-                  }}
-                />
                   <Button
                     type="button"
                     variant="outline"
@@ -735,17 +734,12 @@ export default function RecipeForm() {
                     <FileText className="h-4 w-4" />
                     <span>Importer un PDF</span>
                   </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="gap-1"
-                  onClick={() => cameraInputRef.current?.click()}
-                  disabled={isAnalyzing}
-                >
-                  <Camera className="h-4 w-4" />
-                  <span>Prendre une photo</span>
-                </Button>
+                  <Button type="button" variant="outline" size="sm" className="gap-1" asChild disabled={isAnalyzing}>
+                    <label htmlFor="camera-capture" className="flex items-center gap-1 cursor-pointer">
+                      <Camera className="h-4 w-4" />
+                      <span>Prendre une photo</span>
+                    </label>
+                  </Button>
                   {pdfName && (
                     <span className="inline-flex items-center gap-1 rounded-md bg-muted px-2 py-1 text-xs text-muted-foreground">
                       <FileText className="h-3 w-3" />
