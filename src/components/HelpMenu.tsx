@@ -23,7 +23,7 @@ export default function HelpMenu() {
           <HelpCircle className="h-4 w-4" />
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-w-lg rounded-2xl border border-amber-100 bg-[#fffdf8] shadow-lg">
+      <DialogContent className="max-w-lg rounded-2xl border border-amber-100 bg-[#fffdf8] shadow-lg max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="font-serif text-xl tracking-[0.14em] uppercase text-amber-700">
             📔 Aide & Astuces CookiWiki
@@ -100,7 +100,7 @@ export default function HelpMenu() {
           </section>
         </div>
 
-        <div className="mt-4 flex justify-end">
+        <div className="mt-4 flex justify-end sticky bottom-0 bg-[#fffdf8] pt-3 border-t border-amber-100">
           <DialogClose asChild>
             <Button
               type="button"
