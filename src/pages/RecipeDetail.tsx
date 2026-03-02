@@ -1,6 +1,6 @@
 import { useParams, useNavigate } from 'react-router-dom';
 import { useState, useEffect, useRef } from 'react';
-import { Clock, Edit, ChefHat, Loader2, Plus } from 'lucide-react';
+import { Clock, Edit, ChefHat, Loader2, Plus, Eye } from 'lucide-react';
 import imageCompression from 'browser-image-compression';
 import { useRecipe } from '@/hooks/useRecipes';
 import { useAuth } from '@/hooks/useAuth';
@@ -21,15 +21,55 @@ export default function RecipeDetail() {
   const [updatingImage, setUpdatingImage] = useState(false);
   const [imageOverride, setImageOverride] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const wakeLockRef = useRef<any>(null);
+  const [wakeLockActive, setWakeLockActive] = useState(false);
+  const [wakeLockSupported, setWakeLockSupported] = useState(false);
 
-  // Wake Lock for cooking mode
+  // Wake Lock: keep screen on while viewing recipe
   useEffect(() => {
-    let wakeLock: WakeLockSentinel | null = null;
-    if (cookingMode && 'wakeLock' in navigator) {
-      navigator.wakeLock.request('screen').then((wl) => { wakeLock = wl; }).catch(() => {});
+    const supported = typeof navigator !== 'undefined' && 'wakeLock' in navigator;
+    setWakeLockSupported(supported);
+
+    const requestWakeLock = async () => {
+      if (!supported) return;
+      try {
+        // @ts-ignore - Wake Lock not in all TS libs
+        const wl = await navigator.wakeLock.request('screen');
+        wakeLockRef.current = wl;
+        setWakeLockActive(true);
+        wl.addEventListener?.('release', () => setWakeLockActive(false));
+      } catch {
+        setWakeLockActive(false);
+      }
+    };
+
+    const releaseWakeLock = async () => {
+      try {
+        await wakeLockRef.current?.release?.();
+      } catch {
+        // ignore
+      } finally {
+        wakeLockRef.current = null;
+        setWakeLockActive(false);
+      }
+    };
+
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        void requestWakeLock();
+      } else {
+        void releaseWakeLock();
+      }
+    };
+
+    void requestWakeLock();
+    document.addEventListener('visibilitychange', onVisibility);
+
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibility);
+      void releaseWakeLock();
     }
-    return () => { wakeLock?.release(); };
-  }, [cookingMode]);
+  }, []);
 
   async function handlePastedImage(file: File) {
     if (!recipe || !recipe.id) return;
@@ -114,6 +154,20 @@ export default function RecipeDetail() {
     <div className={`min-h-screen ${cookingMode ? 'bg-card' : 'bg-background'}`}>
       <Header />
       <main className="container max-w-2xl py-6 space-y-6">
+        {wakeLockSupported && (
+          <div className="flex justify-end">
+            <span
+              className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] ${
+                wakeLockActive
+                  ? 'border-amber-300 bg-amber-50 text-amber-700'
+                  : 'border-border bg-card text-muted-foreground'
+              }`}
+            >
+              <Eye className="h-3.5 w-3.5" />
+              {wakeLockActive ? 'Écran actif' : 'Écran inactif'}
+            </span>
+          </div>
+        )}
         {(imageOverride || recipe.image_url) && (
           <div className="relative w-full">
             <img
