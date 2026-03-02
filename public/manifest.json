@@ -1,0 +1,15 @@
+{
+  "name": "CookiWiki",
+  "short_name": "CookiWiki",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#f97316",
+  "icons": [
+    {
+      "src": "/logo_CookiWik.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
