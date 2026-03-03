@@ -466,23 +466,6 @@ export default function RecipeForm() {
     void handlePastedImage(file);
   };
 
-  useEffect(() => {
-    const onPaste = (event: ClipboardEvent) => {
-      const items = Array.from(event.clipboardData?.items || []);
-      const imageItem = items.find((item) => item.type.startsWith('image/'));
-      if (!imageItem) return;
-
-      const file = imageItem.getAsFile();
-      if (!file) return;
-
-      event.preventDefault();
-      void handlePastedImage(file);
-    };
-
-    window.addEventListener('paste', onPaste);
-    return () => window.removeEventListener('paste', onPaste);
-  }, []);
-
   if (isEdit && loadingRecipe) {
     return (
       <div className="min-h-screen bg-background">
@@ -597,7 +580,7 @@ export default function RecipeForm() {
                         disabled={isAnalyzing}
                       >
                         <Sparkles className="h-4 w-4" />
-                        <span>Tout remplacer</span>
+                      <span>{isAnalyzing ? 'Analyse en cours...' : 'Tout remplacer'}</span>
                       </Button>
                       <Button
                         type="button"
@@ -608,7 +591,7 @@ export default function RecipeForm() {
                         disabled={isAnalyzing}
                       >
                         <Sparkles className="h-4 w-4" />
-                        <span>Compléter la recette</span>
+                      <span>{isAnalyzing ? 'Analyse en cours...' : 'Compléter la recette'}</span>
                       </Button>
                     </>
                   )}
@@ -659,8 +642,17 @@ export default function RecipeForm() {
                       onClick={() => handleUrlImport(false)}
                       disabled={isAnalyzing}
                     >
-                      <Sparkles className="h-4 w-4" />
-                      <span>Tout remplacer</span>
+                      {isAnalyzing ? (
+                        <>
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          <span>Analyse en cours...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Sparkles className="h-4 w-4" />
+                          <span>Tout remplacer</span>
+                        </>
+                      )}
                     </Button>
                     <Button
                       type="button"
@@ -670,8 +662,17 @@ export default function RecipeForm() {
                       onClick={() => handleUrlImport(true)}
                       disabled={isAnalyzing}
                     >
-                      <Sparkles className="h-4 w-4" />
-                      <span>Compléter la recette</span>
+                      {isAnalyzing ? (
+                        <>
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          <span>Analyse en cours...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Sparkles className="h-4 w-4" />
+                          <span>Compléter la recette</span>
+                        </>
+                      )}
                     </Button>
                   </>
                 )}
@@ -790,8 +791,17 @@ export default function RecipeForm() {
                       onClick={() => handleTextAnalyze(false)}
                       disabled={isAnalyzing}
                     >
-                      <Sparkles className="h-4 w-4" />
-                      <span>Tout remplacer</span>
+                      {isAnalyzing ? (
+                        <>
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          <span>Analyse en cours...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Sparkles className="h-4 w-4" />
+                          <span>Tout remplacer</span>
+                        </>
+                      )}
                     </Button>
                     <Button
                       type="button"
@@ -801,8 +811,17 @@ export default function RecipeForm() {
                       onClick={() => handleTextAnalyze(true)}
                       disabled={isAnalyzing}
                     >
-                      <Sparkles className="h-4 w-4" />
-                      <span>Compléter la recette</span>
+                      {isAnalyzing ? (
+                        <>
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          <span>Analyse en cours...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Sparkles className="h-4 w-4" />
+                          <span>Compléter la recette</span>
+                        </>
+                      )}
                     </Button>
                   </>
                 )}
@@ -816,8 +835,17 @@ export default function RecipeForm() {
                       onClick={() => handlePdfAnalyze(false)}
                       disabled={isAnalyzing}
                     >
-                      <Sparkles className="h-4 w-4" />
-                      <span>Analyser le PDF</span>
+                      {isAnalyzing ? (
+                        <>
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          <span>Analyse en cours...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Sparkles className="h-4 w-4" />
+                          <span>Analyser le PDF</span>
+                        </>
+                      )}
                     </Button>
                     {!formIsEmpty && (
                       <Button
@@ -828,8 +856,17 @@ export default function RecipeForm() {
                         onClick={() => handlePdfAnalyze(true)}
                         disabled={isAnalyzing}
                       >
-                        <Sparkles className="h-4 w-4" />
-                        <span>Compléter depuis le PDF</span>
+                        {isAnalyzing ? (
+                          <>
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                            <span>Analyse en cours...</span>
+                          </>
+                        ) : (
+                          <>
+                            <Sparkles className="h-4 w-4" />
+                            <span>Compléter depuis le PDF</span>
+                          </>
+                        )}
                       </Button>
                     )}
                   </>

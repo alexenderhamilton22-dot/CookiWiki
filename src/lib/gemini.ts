@@ -196,4 +196,3 @@ Analyse ce texte pour extraire la recette complète et renvoie le JSON décrit c
     throw new Error("La réponse de l'IA n'a pas pu être interprétée pour ce texte.");
   }
 }
-
