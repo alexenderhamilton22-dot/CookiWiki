@@ -17,7 +17,7 @@ export default function HelpMenu() {
         <Button
           variant="ghost"
           size="icon"
-          className="h-8 w-8 rounded-full border border-amber-300/70 bg-amber-50/60 text-amber-700 shadow-sm hover:bg-amber-100 hover:text-amber-800"
+          className="h-8 w-8 rounded-full border border-amber-300/70 bg-amber-50/60 text-amber-700 shadow-xs hover:bg-amber-100 hover:text-amber-800"
           aria-label="Aide CookiWiki"
         >
           <HelpCircle className="h-4 w-4" />
@@ -43,18 +43,23 @@ export default function HelpMenu() {
             </p>
             <ul className="ml-4 list-disc space-y-1">
               <li>
-                <span className="font-medium">Glisser un PDF</span> dans l&apos;onglet <span className="italic">Texte</span> pour
-                que MAMIFA lise et structure automatiquement la recette.
+                <span className="font-medium">Saisir manuellement</span> le titre, les ingrédients et les étapes, ou copier le texte d’un PDF dans l’onglet <span className="italic">Texte</span> de l’import IA.
               </li>
               <li>
                 <span className="font-medium">Coller une URL</span> de site de cuisine (Marmiton, Cuisine AZ, etc.) dans
-                l&apos;onglet <span className="italic">Lien Web</span> pour extraire ingrédients et étapes.
+                l&apos;onglet <span className="italic">Lien Web</span> de l’import IA. La page est récupérée avant analyse. Si le site bloque sa lecture, copiez son texte dans l’onglet Texte. Relisez toujours le résultat.
               </li>
               <li>
                 <span className="font-medium">Utiliser Ctrl+V / Cmd+V</span> pour coller une capture d&apos;écran ou une image&nbsp;:
                 elle devient automatiquement la photo de couverture de la recette.
               </li>
             </ul>
+          </section>
+
+          <section className="space-y-1.5">
+            <h2 className="font-serif text-sm font-semibold">Brouillons et modifications</h2>
+            <p>Votre saisie est sauvegardée sur cet appareil. Lors d’un retour, choisissez « Reprendre le brouillon » pour la retrouver. Le brouillon reste disponible 14 jours et n’est pas partagé avec vos autres appareils. Après publication, il est supprimé.</p>
+            <p>Une confirmation vous avertit avant de quitter une recette modifiée. Pour une photo de document non encore analysée, sélectionnez à nouveau le fichier après rechargement.</p>
           </section>
 
           <section className="space-y-1.5">
@@ -82,7 +87,7 @@ export default function HelpMenu() {
               </li>
               <li>
                 <span className="font-medium">Par tags</span>&nbsp;: recherchez par type de plat ou régime
-                (<span className="italic">Végétarien</span>, <span className="italic">Dessert</span>).
+                en ouvrant le panneau <span className="italic">Tags</span>. Vous pouvez rechercher un tag ; tous les tags cochés doivent être présents.
               </li>
             </ul>
           </section>
@@ -92,10 +97,9 @@ export default function HelpMenu() {
               ✨ Astuce Image
             </h2>
             <p>
-              Si vous n&apos;avez pas de photo pour une recette, MAMIFA choisit automatiquement une
-              belle illustration depuis Unsplash, en se basant sur le type de plat et vos tags
-              (par exemple <span className="italic">dessert</span>, <span className="italic">salade</span>,{' '}
-              <span className="italic">poisson</span>...).
+              Ajoutez ou prenez une photo du plat dans « Photo de couverture ». Cette photo ne déclenche pas l’IA.
+              Pour importer une recette papier, utilisez « Photo » dans l’import IA : le document n’est pas la couverture.
+              Sans photo, la carte affiche un pictogramme. Vous pouvez ajouter une couverture plus tard depuis la recette.
             </p>
           </section>
 

@@ -1,9 +1,20 @@
 {
-  "rewrites": [
-    {
-      "source": "/(.*)",
-      "destination": "/index.html"
+  "functions": {
+    "api/analyze-recipe.ts": {
+      "maxDuration": 60
     }
-  ]
+  },
+  "routes": [
+    {
+      "handle": "filesystem"
+    },
+    {
+      "src": "/(?!api(?:/|$)).*",
+      "dest": "/index.html"
+    }
+  ],
+  "framework": "vite",
+  "installCommand": "npm ci",
+  "buildCommand": "npm run build",
+  "outputDirectory": "dist"
 }
-

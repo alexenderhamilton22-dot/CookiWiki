@@ -1,56 +1,67 @@
 import { useParams, useNavigate } from 'react-router-dom';
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback, lazy, Suspense } from 'react';
+import { usePersonalRecipes } from '@/hooks/usePersonalRecipes';
 import { Clock, Edit, ChefHat, Loader2, Plus, Eye } from 'lucide-react';
-import imageCompression from 'browser-image-compression';
+import { uploadRecipePhoto } from '@/lib/recipePhoto';
 import { useRecipe } from '@/hooks/useRecipes';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/lib/supabase';
 import Header from '@/components/Header';
+import RecipeInstructions from '@/components/RecipeInstructions';
 import IngredientsList from '@/components/IngredientsList';
 import CommentSection from '@/components/CommentSection';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
+const RecipeHistory = lazy(() => import('@/components/RecipeHistory'));
 
 export default function RecipeDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { recipe, loading } = useRecipe(id);
   const { user } = useAuth();
+  const personal = usePersonalRecipes();
+  const { recordView } = personal;
+  const [historyOpen, setHistoryOpen] = useState(false);
+  useEffect(() => { if (recipe?.id) void recordView(recipe.id); }, [recipe?.id, recordView]);
   const [cookingMode, setCookingMode] = useState(false);
   const [updatingImage, setUpdatingImage] = useState(false);
   const [imageOverride, setImageOverride] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
-  const wakeLockRef = useRef<any>(null);
+  const wakeLockRef = useRef<WakeLockSentinel | null>(null);
   const [wakeLockActive, setWakeLockActive] = useState(false);
   const [wakeLockSupported, setWakeLockSupported] = useState(false);
 
   // Wake Lock: keep screen on while viewing recipe
   useEffect(() => {
+    let active = true;
+    let pending = false;
     const supported = typeof navigator !== 'undefined' && 'wakeLock' in navigator;
     setWakeLockSupported(supported);
 
     const requestWakeLock = async () => {
-      if (!supported) return;
+      if (!supported || pending || document.visibilityState !== 'visible' || wakeLockRef.current && !wakeLockRef.current.released) return;
+      pending = true;
       try {
-        // @ts-ignore - Wake Lock not in all TS libs
         const wl = await navigator.wakeLock.request('screen');
+        if (!active || document.visibilityState !== 'visible') { await wl.release(); return; }
         wakeLockRef.current = wl;
         setWakeLockActive(true);
-        wl.addEventListener?.('release', () => setWakeLockActive(false));
+        wl.addEventListener?.('release', () => { if (active && wakeLockRef.current === wl) { wakeLockRef.current = null; setWakeLockActive(false); } });
       } catch {
-        setWakeLockActive(false);
-      }
+        if (active) setWakeLockActive(false);
+      } finally { pending = false; }
     };
 
     const releaseWakeLock = async () => {
+      const lock = wakeLockRef.current;
+      wakeLockRef.current = null;
       try {
-        await wakeLockRef.current?.release?.();
+        await lock?.release?.();
       } catch {
         // ignore
       } finally {
-        wakeLockRef.current = null;
-        setWakeLockActive(false);
+        if (active) setWakeLockActive(false);
       }
     };
 
@@ -66,42 +77,31 @@ export default function RecipeDetail() {
     document.addEventListener('visibilitychange', onVisibility);
 
     return () => {
+      active = false;
       document.removeEventListener('visibilitychange', onVisibility);
       void releaseWakeLock();
     }
   }, []);
 
-  async function handlePastedImage(file: File) {
-    if (!recipe || !recipe.id) return;
+  const handlePastedImage = useCallback(async (file: File) => {
+    if (!recipe || !recipe.id || !user || updatingImage) return;
     setUpdatingImage(true);
     try {
       toast.loading('Mise à jour de la photo...', { id: 'update-photo' });
 
-      const compressed = (await imageCompression(file, {
-        maxSizeMB: 0.8,
-        maxWidthOrHeight: 1200,
-        useWebWorker: true,
-      })) as File;
+      const { url: publicUrl } = await uploadRecipePhoto(file);
 
-      const ext = compressed.type === 'image/png' ? 'png' : 'jpg';
-      const path = `${crypto.randomUUID()}.${ext}`;
-
-      const { error: uploadError } = await supabase.storage.from('recipe-photos').upload(path, compressed);
-      if (uploadError) throw uploadError;
-
-      const { data } = supabase.storage.from('recipe-photos').getPublicUrl(path);
-      const publicUrl = data.publicUrl;
-
-      const { error: dbError } = await supabase
+      const { data: saved, error: dbError } = await supabase
         .from('recipes')
         .update({
           image_url: publicUrl,
           last_modified_by: user?.id ?? null,
           updated_at: new Date().toISOString(),
         })
-        .eq('id', recipe.id);
+        .eq('id', recipe.id).select('id').single();
 
       if (dbError) throw dbError;
+      if (!saved) throw new Error('La recette n’a pas été modifiée.');
 
       setImageOverride(publicUrl);
       toast.success('La photo a été mise à jour !', { id: 'update-photo' });
@@ -111,10 +111,13 @@ export default function RecipeDetail() {
     } finally {
       setUpdatingImage(false);
     }
-  }
+  }, [recipe, user, updatingImage]);
 
   useEffect(() => {
     const onPaste = (event: ClipboardEvent) => {
+      if (!user || updatingImage) return;
+      const target = event.target as HTMLElement;
+      if (target.closest('textarea, input, [contenteditable="true"]')) return;
       const items = Array.from(event.clipboardData?.items || []);
       const imageItem = items.find((item) => item.type.startsWith('image/'));
       if (!imageItem) return;
@@ -126,7 +129,7 @@ export default function RecipeDetail() {
 
     window.addEventListener('paste', onPaste);
     return () => window.removeEventListener('paste', onPaste);
-  }, [recipe?.id, user?.id]);
+  }, [handlePastedImage, user, updatingImage]);
 
   if (loading) {
     return (
@@ -154,6 +157,8 @@ export default function RecipeDetail() {
     <div className={`min-h-screen ${cookingMode ? 'bg-card' : 'bg-background'}`}>
       <Header />
       <main className="container max-w-2xl py-6 space-y-6">
+        {user && <input ref={fileInputRef} type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={(e) => { const file = e.target.files?.[0]; if (file) void handlePastedImage(file); e.target.value = ''; }} />}
+        {user && !imageOverride && !recipe.image_url && <Button variant="outline" disabled={updatingImage} onClick={() => fileInputRef.current?.click()}>Ajouter une photo de couverture</Button>}
         {wakeLockSupported && (
           <div className="flex justify-end">
             <span
@@ -182,57 +187,10 @@ export default function RecipeDetail() {
             )}
             {user && (
               <>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/*"
-                  className="hidden"
-                  onChange={async (e) => {
-                    const file = e.target.files?.[0];
-                    if (!file || !id) return;
-                    setUpdatingImage(true);
-                    try {
-                      const compressed = (await imageCompression(file, {
-                        maxSizeMB: 0.8,
-                        maxWidthOrHeight: 1200,
-                        useWebWorker: true,
-                      })) as File;
-                      const ext = compressed.type === 'image/png' ? 'png' : 'jpg';
-                      const path = `${crypto.randomUUID()}.${ext}`;
-                      const { error: uploadError } = await supabase.storage
-                        .from('recipe-photos')
-                        .upload(path, compressed);
-                      if (uploadError) throw uploadError;
-
-                      const { data } = supabase.storage.from('recipe-photos').getPublicUrl(path);
-                      const url = data.publicUrl;
-
-                      const { error: updateError } = await supabase
-                        .from('recipes')
-                        .update({
-                          image_url: url,
-                          last_modified_by: user.id,
-                          updated_at: new Date().toISOString(),
-                        })
-                        .eq('id', id);
-
-                      if (updateError) throw updateError;
-
-                      setImageOverride(url);
-                      toast.success('Image mise à jour !');
-                    } catch (err: any) {
-                      console.error(err);
-                      toast.error("Impossible de mettre à jour l'image.");
-                    } finally {
-                      setUpdatingImage(false);
-                      if (e.target) e.target.value = '';
-                    }
-                  }}
-                />
                 <button
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
-                  className="absolute right-2 top-2 inline-flex h-8 w-8 items-center justify-center rounded-full bg-black/60 text-white shadow hover:bg-black/80 transition"
+                  className="absolute right-2 top-2 inline-flex h-8 w-8 items-center justify-center rounded-full bg-black/60 text-white shadow-sm hover:bg-black/80 transition"
                   aria-label="Changer l'image"
                   disabled={updatingImage}
                 >
@@ -277,6 +235,7 @@ export default function RecipeDetail() {
         </div>
 
         <div className="flex justify-end">
+          {user && <Button variant="ghost" aria-pressed={personal.records.some((p) => p.recipe_id === recipe.id && p.is_favorite)} onClick={() => void personal.toggleFavorite(recipe.id, !personal.records.some((p) => p.recipe_id === recipe.id && p.is_favorite))}>{personal.records.some((p) => p.recipe_id === recipe.id && p.is_favorite) ? '♥ Favori' : '♡ Ajouter aux favoris'}</Button>}
           <Button
             size="sm"
             variant={cookingMode ? 'secondary' : 'outline'}
@@ -288,20 +247,12 @@ export default function RecipeDetail() {
           </Button>
         </div>
 
-        <IngredientsList ingredients={recipe.ingredients || []} baseServings={recipe.servings || 4} />
+        <IngredientsList key={recipe.id} ingredients={recipe.ingredients || []} baseServings={recipe.servings || 4} />
 
-        <div className="space-y-3">
-          <h3 className="font-serif text-lg font-semibold">Instructions</h3>
-          <div
-            className={`prose max-w-none whitespace-pre-wrap text-foreground ${
-              cookingMode ? 'prose-lg text-xl leading-relaxed' : 'prose-sm'
-            }`}
-          >
-            {recipe.instructions}
-          </div>
-        </div>
+        <RecipeInstructions key={`${recipe.id}:${recipe.updated_at}`} instructions={recipe.instructions} cookingMode={cookingMode} />
 
         <hr className="border-border" />
+        {user && !cookingMode && <section className="space-y-3"><Button variant="ghost" aria-expanded={historyOpen} onClick={() => setHistoryOpen(!historyOpen)}>Historique des modifications</Button>{historyOpen && <Suspense fallback={<p>Chargement…</p>}><RecipeHistory key={recipe.id} recipe={recipe} onRestored={() => window.location.reload()} /></Suspense>}</section>}
         <CommentSection recipeId={recipe.id} />
       </main>
     </div>

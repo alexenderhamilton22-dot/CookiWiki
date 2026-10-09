@@ -6,12 +6,19 @@ import { readFileSync } from 'node:fs';
 
 const { version } = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8')) as { version: string };
 
-import analyzeHandler from './api/analyze-recipe';
-
 const analysisApi = (): Plugin => ({
   name: 'cookiwiki-analysis-api',
   configureServer(server) {
-    server.middlewares.use('/api/analyze-recipe', (req, res) => { void analyzeHandler(req, res); });
+    // Load the local API only when serving a request, never while bundling Vite's config.
+    server.middlewares.use('/api/analyze-recipe', (req, res) => {
+      void server.ssrLoadModule('/api/analyze-recipe.ts').then((module) => module.default(req, res)).catch(() => {
+        if (res.writableEnded) return;
+        res.statusCode = 503;
+        res.setHeader('Content-Type', 'application/json; charset=utf-8');
+        res.setHeader('Cache-Control', 'no-store');
+        res.end(JSON.stringify({ error: { code: 'NOT_CONFIGURED' } }));
+      });
+    });
   },
 });
 

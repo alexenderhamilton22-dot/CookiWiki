@@ -1,78 +1,96 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { Link } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { Send } from 'lucide-react';
+import { Send, Loader2 } from 'lucide-react';
 import type { Comment } from '@/types/recipe';
 import { formatDistanceToNow } from 'date-fns';
 import { fr } from 'date-fns/locale';
+
+const message = (err: unknown) => {
+  const e = err as { code?: string; message?: string };
+  if (e.code === '42501') return 'Envoi refusé : vérifiez votre connexion et les droits de la table comments.';
+  if (e.code === '23503') return 'Votre profil ou cette recette est absent de la base. Contactez l’administrateur.';
+  return e.message || 'Impossible de joindre le serveur. Réessayez.';
+};
 
 export default function CommentSection({ recipeId }: { recipeId: string }) {
   const { user } = useAuth();
   const [comments, setComments] = useState<Comment[]>([]);
   const [newComment, setNewComment] = useState('');
   const [sending, setSending] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
+  const [sendError, setSendError] = useState('');
+  const [sent, setSent] = useState(false);
+  const lock = useRef(false);
+  const activeRecipe = useRef(recipeId);
+  activeRecipe.current = recipeId;
 
-  const fetchComments = async () => {
-    const { data, error } = await supabase
-      .from('comments')
-      .select('*')
-      .eq('recipe_id', recipeId)
-      .order('created_at', { ascending: true });
-    if (!error && data) {
-      setComments(data as Comment[]);
+  const fetchComments = useCallback(async () => {
+    setLoading(true);
+    setLoadError('');
+    try {
+      const { data, error } = await supabase.from('comments').select('*').eq('recipe_id', recipeId).order('created_at', { ascending: true });
+      if (error) throw error;
+      if (activeRecipe.current === recipeId) setComments((data || []) as Comment[]);
+    } catch (err) {
+      if (activeRecipe.current === recipeId) setLoadError(message(err));
+    } finally {
+      if (activeRecipe.current === recipeId) setLoading(false);
+    }
+  }, [recipeId]);
+
+  useEffect(() => {
+    setComments([]); setNewComment(''); setSendError(''); setSent(false);
+    void fetchComments();
+  }, [fetchComments]);
+
+  const handleSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    const content = newComment.trim();
+    if (!content || !user || lock.current) return;
+    lock.current = true;
+    setSending(true); setSendError(''); setSent(false);
+    try {
+      const { error } = await supabase.from('comments').insert({ recipe_id: recipeId, author_id: user.id, content });
+      if (error) throw error;
+      if (activeRecipe.current !== recipeId) return;
+      setNewComment(''); setSent(true);
+      await fetchComments();
+    } catch (err) {
+      if (activeRecipe.current === recipeId) setSendError(message(err));
+    } finally {
+      lock.current = false; setSending(false);
     }
   };
 
-  useEffect(() => { fetchComments(); }, [recipeId]);
-
-  const handleSubmit = async () => {
-    if (!newComment.trim() || !user) return;
-    setSending(true);
-    await supabase.from('comments').insert({
-      recipe_id: recipeId,
-      author_id: user.id,
-      content: newComment.trim(),
-    });
-    setNewComment('');
-    await fetchComments();
-    setSending(false);
-  };
-
   return (
-    <div className="space-y-4">
+    <section className="space-y-4" aria-label="Commentaires">
       <h3 className="font-serif text-lg font-semibold">Commentaires ({comments.length})</h3>
-
+      {loading && <p role="status">Chargement des commentaires…</p>}
+      {loadError && <div role="alert" className="text-sm text-destructive">{loadError} <Button variant="outline" onClick={() => void fetchComments()}>Réessayer</Button></div>}
+      {!loading && !loadError && !comments.length && <p className="text-sm text-muted-foreground">Partagez votre premier retour sur cette recette.</p>}
       {comments.map((c) => (
-        <div key={c.id} className="rounded-lg bg-muted/50 p-3 space-y-1">
-          <div className="flex items-center justify-between">
-            <span className="text-sm font-semibold text-foreground">
-              {c.profiles?.username || 'Anonyme'}
-            </span>
-            <span className="text-xs text-muted-foreground">
-              {formatDistanceToNow(new Date(c.created_at), { addSuffix: true, locale: fr })}
-            </span>
+        <article key={c.id} className="rounded-lg bg-muted/50 p-3 space-y-1">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-sm font-semibold">{c.profiles?.username || (c.author_id === user?.id ? user.user_metadata?.username || 'Vous' : 'Membre')}</span>
+            <span className="text-xs text-muted-foreground">{Number.isNaN(Date.parse(c.created_at)) ? '' : formatDistanceToNow(new Date(c.created_at), { addSuffix: true, locale: fr })}</span>
           </div>
-          <p className="text-sm text-foreground">{c.content}</p>
-        </div>
+          <p className="text-sm whitespace-pre-wrap break-words">{c.content}</p>
+        </article>
       ))}
-
       {user ? (
-        <div className="flex gap-2">
-          <Textarea
-            value={newComment}
-            onChange={(e) => setNewComment(e.target.value)}
-            placeholder="Ajouter un commentaire..."
-            className="min-h-[60px] bg-card"
-          />
-          <Button size="icon" onClick={handleSubmit} disabled={sending || !newComment.trim()}>
-            <Send className="h-4 w-4" />
-          </Button>
-        </div>
-      ) : (
-        <p className="text-sm text-muted-foreground italic">Connectez-vous pour commenter.</p>
-      )}
-    </div>
+        <form onSubmit={handleSubmit} className="space-y-2">
+          <label htmlFor={`comment-${recipeId}`} className="text-sm font-medium">Votre commentaire</label>
+          <Textarea id={`comment-${recipeId}`} value={newComment} disabled={sending} maxLength={5000} onChange={(e) => { setNewComment(e.target.value); setSent(false); }} placeholder="Une astuce, une variante, votre avis…" className="min-h-[90px] bg-card" />
+          {sendError && <p role="alert" className="text-sm text-destructive">{sendError} Votre texte est conservé.</p>}
+          {sent && <p role="status" className="text-sm text-primary">Commentaire envoyé.</p>}
+          <Button type="submit" disabled={sending || !newComment.trim()}>{sending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}{sending ? 'Envoi…' : 'Publier le commentaire'}</Button>
+        </form>
+      ) : <p className="text-sm"><Link className="underline" to="/connexion">Connectez-vous</Link> pour commenter.</p>}
+    </section>
   );
 }

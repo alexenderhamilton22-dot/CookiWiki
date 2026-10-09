@@ -1,92 +1,52 @@
-import { useRef, useState, useEffect } from 'react';
+import { useRef, useState } from 'react';
 import { Camera, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { supabase } from '@/lib/supabase';
-import imageCompression from 'browser-image-compression';
+import { uploadRecipePhoto } from '@/lib/recipePhoto';
+import { toast } from 'sonner';
 
 interface Props {
   currentUrl: string | null;
   onUploaded: (url: string, file: File) => void;
+  onBusyChange?: (busy: boolean) => void;
 }
 
-export default function ImageUpload({ currentUrl, onUploaded }: Props) {
+export default function ImageUpload({ currentUrl, onUploaded, onBusyChange }: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
+  const cameraRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
-  const [preview, setPreview] = useState<string | null>(currentUrl);
-  const [previewError, setPreviewError] = useState(false);
-
-  useEffect(() => {
-    if (currentUrl) {
-      setPreview(currentUrl);
-      setPreviewError(false);
-    }
-  }, [currentUrl]);
-
+  const busy = useRef(false);
   const handleFile = async (file: File) => {
+    if (busy.current) return;
+    busy.current = true;
     setUploading(true);
+    onBusyChange?.(true);
     try {
-      const compressed = (await imageCompression(file, {
-        maxSizeMB: 0.8,
-        maxWidthOrHeight: 1200,
-        useWebWorker: true,
-      })) as File;
-      const ext = compressed.type === 'image/png' ? 'png' : 'jpg';
-      const path = `${crypto.randomUUID()}.${ext}`;
-      const { error } = await supabase.storage.from('recipe-photos').upload(path, compressed);
-      if (error) throw error;
-
-      const { data } = supabase.storage.from('recipe-photos').getPublicUrl(path);
-      setPreview(data.publicUrl);
-      onUploaded(data.publicUrl, compressed);
+      const { url, compressed } = await uploadRecipePhoto(file);
+      onUploaded(url, compressed);
+      toast.success('Photo prête. Enregistrez la recette pour conserver la couverture.');
     } catch (err) {
-      console.error('Upload failed', err);
+      toast.error(err instanceof Error ? err.message : 'Impossible d’envoyer la photo. Vérifiez les droits du dossier recipe-photos.');
     } finally {
+      busy.current = false;
       setUploading(false);
+      onBusyChange?.(false);
+      if (inputRef.current) inputRef.current.value = '';
+      if (cameraRef.current) cameraRef.current.value = '';
     }
   };
-
   return (
-    <div>
-      <input
-        ref={inputRef}
-        type="file"
-        accept="image/*"
-        className="hidden"
-        onChange={(e) => e.target.files?.[0] && handleFile(e.target.files[0])}
-      />
-      {preview ? (
-        <div className="relative group">
-          {previewError ? (
-            <div className="w-full rounded-lg aspect-video flex items-center justify-center bg-muted text-xs text-muted-foreground">
-              Image non disponible
-            </div>
-          ) : (
-            <img
-              src={preview}
-              alt="Photo"
-              className="w-full rounded-lg aspect-video object-cover"
-              onError={() => setPreviewError(true)}
-            />
-          )}
-          <button
-            onClick={() => inputRef.current?.click()}
-            className="absolute inset-0 flex items-center justify-center bg-foreground/40 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg text-card text-sm font-medium"
-          >
-            Changer la photo
-          </button>
-        </div>
-      ) : (
-        <Button
-          type="button"
-          variant="outline"
-          className="w-full h-32 border-dashed flex-col gap-2"
-          onClick={() => inputRef.current?.click()}
-          disabled={uploading}
-        >
-          {uploading ? <Loader2 className="h-6 w-6 animate-spin" /> : <Camera className="h-6 w-6 text-muted-foreground" />}
-          <span className="text-sm text-muted-foreground">{uploading ? 'Compression & envoi...' : 'Ajouter une photo'}</span>
+    <div className="space-y-3" aria-busy={uploading}>
+      <input ref={inputRef} type="file" accept="image/jpeg,image/png,image/webp" className="hidden" aria-label="Choisir une photo" onChange={(e) => { if (e.target.files?.[0]) void handleFile(e.target.files[0]); }} />
+      <input ref={cameraRef} type="file" accept="image/*" capture="environment" className="hidden" aria-label="Photographier le plat" onChange={(e) => { if (e.target.files?.[0]) void handleFile(e.target.files[0]); }} />
+      {currentUrl && <img src={currentUrl} alt="Couverture de la recette" className="w-full max-h-56 rounded-lg object-cover" />}
+      <div className="flex flex-wrap gap-2">
+        <Button type="button" variant="outline" disabled={uploading} onClick={() => inputRef.current?.click()}>
+          {uploading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Camera className="mr-2 h-4 w-4" />}
+          {uploading ? 'Envoi en cours…' : currentUrl ? 'Changer la photo' : 'Ajouter une photo'}
         </Button>
-      )}
+        <Button type="button" variant="outline" disabled={uploading} onClick={() => cameraRef.current?.click()}>Prendre une photo</Button>
+      </div>
+      <p className="text-xs text-muted-foreground">JPEG, PNG ou WebP, 15 Mo maximum. La photo est compressée automatiquement.</p>
     </div>
   );
 }

@@ -5,15 +5,26 @@ import type { Recipe } from '@/types/recipe';
 export function useRecipes() {
   const [recipes, setRecipes] = useState<Recipe[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
   const fetchRecipes = useCallback(async () => {
     setLoading(true);
-    const { data, error } = await supabase
-      .from('recipes')
-      .select('*')
-      .order('created_at', { ascending: false });
-    if (!error && data) setRecipes(data as Recipe[]);
-    setLoading(false);
+    setError('');
+    try {
+      // PostgREST limits each response; do not display a truncated library count.
+      const all: Recipe[] = [];
+      for (let offset = 0; ; offset += 500) {
+        const { data, error: dbError } = await supabase.from('recipes').select('*').order('created_at', { ascending: false }).order('id').range(offset, offset + 499);
+        if (dbError) throw dbError;
+        all.push(...((data || []) as Recipe[]));
+        if (!data || data.length < 500) break;
+      }
+      setRecipes([...new Map(all.map((r) => [r.id, r])).values()]);
+    } catch {
+      setError('Impossible de charger les recettes. Vérifiez votre connexion.');
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   useEffect(() => {
@@ -48,7 +59,7 @@ export function useRecipes() {
     };
   }, [fetchRecipes]);
 
-  return { recipes, loading, refetch: fetchRecipes };
+  return { recipes, loading, error, refetch: fetchRecipes };
 }
 
 export function useRecipe(id: string | undefined) {
@@ -56,7 +67,9 @@ export function useRecipe(id: string | undefined) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!id) return;
+    setRecipe(null);
+    if (!id) { setLoading(false); return; }
+    let active = true;
     setLoading(true);
     supabase
       .from('recipes')
@@ -64,9 +77,11 @@ export function useRecipe(id: string | undefined) {
       .eq('id', id)
       .single()
       .then(({ data, error }) => {
+        if (!active) return;
         if (!error && data) setRecipe(data as Recipe);
         setLoading(false);
       });
+    return () => { active = false; };
   }, [id]);
 
   return { recipe, loading };

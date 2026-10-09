@@ -32,8 +32,8 @@ export default function Auth() {
         await signIn(email, password);
         navigate('/');
       }
-    } catch (err: any) {
-      toast.error(err.message || 'Erreur de connexion');
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Erreur de connexion');
     } finally {
       setLoading(false);
     }

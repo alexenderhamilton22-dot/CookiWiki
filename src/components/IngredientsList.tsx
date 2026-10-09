@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Minus, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import type { Ingredient } from '@/types/recipe';
+import { formatRecipeQuantity } from '@/lib/recipeQuantity';
 
 interface Props {
   ingredients: Ingredient[];
@@ -13,8 +14,7 @@ export default function IngredientsList({ ingredients, baseServings }: Props) {
   const ratio = baseServings > 0 ? servings / baseServings : 1;
 
   const formatQty = (qty: number) => {
-    const scaled = qty * ratio;
-    return scaled % 1 === 0 ? scaled.toString() : scaled.toFixed(1);
+    return formatRecipeQuantity(qty, ratio);
   };
 
   return (
@@ -25,7 +25,8 @@ export default function IngredientsList({ ingredients, baseServings }: Props) {
           <Button
             size="icon"
             variant="ghost"
-            className="h-7 w-7 rounded-full"
+            className="h-11 w-11 rounded-full"
+            aria-label="Réduire le nombre de parts"
             onClick={() => setServings(Math.max(1, servings - 1))}
           >
             <Minus className="h-3.5 w-3.5" />
@@ -34,7 +35,8 @@ export default function IngredientsList({ ingredients, baseServings }: Props) {
           <Button
             size="icon"
             variant="ghost"
-            className="h-7 w-7 rounded-full"
+            className="h-11 w-11 rounded-full"
+            aria-label="Augmenter le nombre de parts"
             onClick={() => setServings(servings + 1)}
           >
             <Plus className="h-3.5 w-3.5" />
@@ -53,6 +55,7 @@ export default function IngredientsList({ ingredients, baseServings }: Props) {
           </li>
         ))}
       </ul>
+      {ingredients.some((i) => !i.qty) && <p className="mt-2 text-xs text-muted-foreground">— : quantité non précisée dans la recette.</p>}
     </div>
   );
 }

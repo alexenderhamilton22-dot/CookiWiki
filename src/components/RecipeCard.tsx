@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { Clock, Trash2 } from 'lucide-react';
+import { Clock, Trash2, Heart } from 'lucide-react';
 import type { Recipe } from '@/types/recipe';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -7,15 +7,17 @@ import { Button } from '@/components/ui/button';
 interface Props {
   recipe: Recipe;
   onDelete?: (id: string) => void;
+  favorite?: boolean;
+  onFavorite?: () => void;
 }
 
-export default function RecipeCard({ recipe, onDelete }: Props) {
+export default function RecipeCard({ recipe, onDelete, favorite, onFavorite }: Props) {
   const totalTime = (recipe.prep_time || 0) + (recipe.cook_time || 0);
   const authorTag = recipe.tags?.find((t) => t.toLowerCase().startsWith('auteur:'));
   const authorName = authorTag ? authorTag.split(':').slice(1).join(':').trim() : '';
 
   return (
-    <div className="group relative overflow-hidden rounded-lg border border-border bg-card shadow-sm transition-all hover:shadow-md animate-fade-in">
+    <div className="group relative overflow-hidden rounded-lg border border-border bg-card shadow-xs transition-all hover:shadow-md animate-fade-in">
       <Link to={`/recette/${recipe.id}`} className="block">
         <div className="relative aspect-[4/3] overflow-hidden bg-muted">
           {recipe.image_url ? (
@@ -57,12 +59,13 @@ export default function RecipeCard({ recipe, onDelete }: Props) {
           )}
         </div>
       </Link>
+      {onFavorite && <Button type="button" size="icon" variant="outline" className="absolute right-14 top-1.5 h-11 w-11 bg-card" aria-label={`${favorite ? 'Retirer des' : 'Ajouter aux'} favoris : ${recipe.title}`} aria-pressed={!!favorite} onClick={onFavorite}><Heart className={favorite ? 'fill-primary text-primary h-5 w-5' : 'h-5 w-5'} /></Button>}
       {onDelete && (
         <Button
           type="button"
           size="icon"
           variant="ghost"
-          className="absolute right-1.5 top-1.5 h-7 w-7 rounded-full bg-black/40 text-amber-50 opacity-0 shadow-sm transition-opacity hover:bg-black/60 group-hover:opacity-100"
+          className="absolute right-1.5 top-1.5 h-11 w-11 rounded-full bg-black/40 text-amber-50 shadow-xs hover:bg-black/60"
           onClick={(e) => {
             e.preventDefault();
             e.stopPropagation();

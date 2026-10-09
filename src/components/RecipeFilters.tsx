@@ -1,116 +1,80 @@
-import { useState, useMemo } from 'react';
-import { Search, X } from 'lucide-react';
+import { useState, useMemo, useEffect } from 'react';
+import { Search, X, SlidersHorizontal } from 'lucide-react';
 import { Input } from '@/components/ui/input';
-import { Slider } from '@/components/ui/slider';
-import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger, SheetDescription } from '@/components/ui/sheet';
 import type { Recipe } from '@/types/recipe';
+import { filterRecipes, normalize } from '@/lib/recipeSearch';
+import { recipeStats } from '@/lib/recipeStats';
 
-interface Props {
-  recipes: Recipe[];
-  onFiltered: (filtered: Recipe[]) => void;
-}
-
-export default function RecipeFilters({ recipes, onFiltered }: Props) {
+interface Props { recipes: Recipe[]; libraryRecipes?: Recipe[]; onFiltered: (filtered: Recipe[]) => void; }
+export default function RecipeFilters({ recipes, libraryRecipes = recipes, onFiltered }: Props) {
+  const stats = useMemo(() => recipeStats(libraryRecipes), [libraryRecipes]);
+  const [statsOpen, setStatsOpen] = useState(false);
   const [search, setSearch] = useState('');
-  const [maxTime, setMaxTime] = useState(180);
+  const [maxTime, setMaxTime] = useState<number | null>(null);
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
-
-  const allTags = useMemo(() => {
-    const tags = new Set<string>();
-    recipes.forEach((r) => r.tags?.forEach((t) => tags.add(t)));
-    return Array.from(tags).sort();
-  }, [recipes]);
-
-  const maxTotalTime = useMemo(() => {
-    return Math.max(...recipes.map((r) => (r.prep_time || 0) + (r.cook_time || 0)), 180);
-  }, [recipes]);
-
-  useMemo(() => {
-    const searchLower = search.toLowerCase();
-    // Parse exclusions (words starting with -)
-    const terms = searchLower.split(/\s+/).filter(Boolean);
-    const excludes = terms.filter((t) => t.startsWith('-')).map((t) => t.slice(1)).filter(Boolean);
-    const includes = terms.filter((t) => !t.startsWith('-'));
-
-    const filtered = recipes.filter((r) => {
-      const totalTime = (r.prep_time || 0) + (r.cook_time || 0);
-      if (totalTime > maxTime) return false;
-
-      if (selectedTags.length > 0 && !selectedTags.every((tag) => r.tags?.includes(tag))) return false;
-
-      const ingredientNames = r.ingredients?.map((i) => i.name.toLowerCase()) ?? [];
-      
-      // Check exclusions
-      if (excludes.some((ex) => ingredientNames.some((n) => n.includes(ex)))) return false;
-
-      // Check includes
-      if (includes.length > 0) {
-        const titleLower = r.title.toLowerCase();
-        const matchesAny = includes.some(
-          (term) => titleLower.includes(term) || ingredientNames.some((n) => n.includes(term))
-        );
-        if (!matchesAny) return false;
-      }
-
-      return true;
-    });
-
-    onFiltered(filtered);
-  }, [search, maxTime, selectedTags, recipes, onFiltered]);
-
-  const toggleTag = (tag: string) => {
-    setSelectedTags((prev) => (prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag]));
-  };
-
+  const [tagSearch, setTagSearch] = useState('');
+  const [sort, setSort] = useState('recent');
+  const allTags = useMemo(() => Array.from(new Set(recipes.flatMap((r) => r.tags || []))).sort((a, b) => a.localeCompare(b, 'fr')), [recipes]);
+  const filtered = useMemo(() => {
+    const result = filterRecipes(recipes, search, maxTime, selectedTags);
+    if (sort === 'title') result.sort((a, b) => a.title.localeCompare(b.title, 'fr'));
+    if (sort === 'time') result.sort((a, b) => ((a.prep_time || 0) + (a.cook_time || 0)) - ((b.prep_time || 0) + (b.cook_time || 0)));
+    return result;
+  }, [recipes, search, maxTime, selectedTags, sort]);
+  useEffect(() => onFiltered(filtered), [filtered, onFiltered]);
+  const toggle = (tag: string) => setSelectedTags((prev) => prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag]);
+  const reset = () => { setSearch(''); setMaxTime(null); setSelectedTags([]); setTagSearch(''); };
   return (
-    <div className="space-y-4">
-      <div className="relative">
-        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-        <Input
-          placeholder='Rechercher... (ex: "-oignon" pour exclure)'
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="pl-9 pr-9 bg-card"
-        />
-        {search && (
-          <button onClick={() => setSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
-            <X className="h-4 w-4" />
-          </button>
-        )}
-      </div>
-
-      <div className="space-y-1">
-        <label className="text-sm font-medium text-muted-foreground">
-          Temps total : ≤ {maxTime} min
-        </label>
-        <Slider
-          value={[maxTime]}
-          onValueChange={([v]) => setMaxTime(v)}
-          max={maxTotalTime}
-          min={0}
-          step={5}
-          className="py-2"
-        />
-      </div>
-
-      {allTags.length > 0 && (
-        <div className="flex flex-wrap gap-1.5">
-          {allTags.map((tag) => (
-            <Badge
-              key={tag}
-              variant={selectedTags.includes(tag) ? 'default' : 'outline'}
-              className={`cursor-pointer transition-colors text-xs ${
-                selectedTags.includes(tag)
-                  ? 'bg-secondary text-secondary-foreground hover:bg-secondary/90'
-                  : 'bg-card hover:bg-accent'
-              }`}
-              onClick={() => toggleTag(tag)}
-            >
-              {tag}
-            </Badge>
-          ))}
+    <section className="space-y-3 rounded-xl border bg-card p-3" aria-label="Recherche de recettes">
+      <div className="flex gap-2">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+          <Input aria-label="Rechercher une recette" placeholder="Titre, ingrédients… (ex. poulet -oignon)" value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9 pr-9" />
+          {search && <button type="button" aria-label="Effacer la recherche" onClick={() => setSearch('')} className="absolute right-2 top-2 p-1"><X className="h-4 w-4" /></button>}
         </div>
-      )}
-    </div>
+        <Sheet>
+          <SheetTrigger asChild><Button variant="outline" className="gap-2"><SlidersHorizontal className="h-4 w-4" />Tags{selectedTags.length ? ` (${selectedTags.length})` : ''}</Button></SheetTrigger>
+          <SheetContent className="flex flex-col">
+            <SheetHeader><SheetTitle>Filtrer par tags</SheetTitle><SheetDescription>La recette doit posséder tous les tags sélectionnés.</SheetDescription></SheetHeader>
+            <Input aria-label="Rechercher un tag" placeholder="Rechercher un tag ou un auteur…" value={tagSearch} onChange={(e) => setTagSearch(e.target.value)} />
+            <div className="flex-1 overflow-y-auto space-y-1 pr-2">
+              {allTags.filter((t) => normalize(t).includes(normalize(tagSearch))).map((tag) => (
+                <label key={tag} className="flex items-center gap-3 rounded-md p-2 hover:bg-muted cursor-pointer text-sm">
+                  <input type="checkbox" checked={selectedTags.includes(tag)} onChange={() => toggle(tag)} className="h-4 w-4" />
+                  <span className="flex-1 break-words">{tag}</span>
+                  <span className="text-muted-foreground">{recipes.filter((r) => r.tags?.includes(tag)).length}</span>
+                </label>
+              ))}
+              {!allTags.some((t) => normalize(t).includes(normalize(tagSearch))) && <p className="text-sm">Aucun tag trouvé.</p>}
+            </div>
+            <p role="status" className="text-sm">{filtered.length} recette(s)</p>
+            <Button variant="outline" onClick={() => setSelectedTags([])}>Effacer les tags</Button>
+          </SheetContent>
+        </Sheet>
+      </div>
+      <div className="flex flex-wrap items-center gap-2 text-sm">
+        <Sheet open={statsOpen} onOpenChange={setStatsOpen}>
+          <SheetTrigger asChild><Button variant="ghost" size="sm">Répartition ({stats.total})</Button></SheetTrigger>
+          <SheetContent className="flex flex-col">
+            <SheetHeader><SheetTitle>{stats.total} recettes dans la bibliothèque</SheetTitle><SheetDescription>Répartition de toutes les recettes. Une recette peut figurer dans plusieurs tags/catégories.</SheetDescription></SheetHeader>
+            <div className="overflow-y-auto flex-1 space-y-4">
+              <p className="text-sm">{stats.withoutTag} sans tag/catégorie</p>
+              {[{ title: 'Par tag / catégorie', items: stats.tags }, { title: 'Par auteur', items: stats.authors }].map((group) => <section key={group.title} className="space-y-2"><h3 className="font-semibold">{group.title}</h3>{group.items.length === 0 && <p className="text-sm">Aucune information renseignée.</p>}{group.items.map(({ tag, count }) => <div key={tag} className="flex gap-2 justify-between py-2 border-b"><span className="break-words">{tag.replace(/^auteur\s*:/i, '').trim()}</span><strong>{count}</strong></div>)}</section>)}
+            </div>
+          </SheetContent>
+        </Sheet>
+        <label htmlFor="max-time">Temps total</label>
+        <select id="max-time" className="rounded-md border bg-background p-2" value={maxTime ?? ''} onChange={(e) => setMaxTime(e.target.value ? Number(e.target.value) : null)}>
+          <option value="">Tous</option>{[15, 30, 45, 60, 90, 120, 180].map((time) => <option key={time} value={time}>≤ {time} min</option>)}
+        </select>
+        <label htmlFor="recipe-sort" className="sm:ml-auto">Trier</label>
+        <select id="recipe-sort" className="rounded-md border bg-background p-2" value={sort} onChange={(e) => setSort(e.target.value)}><option value="recent">Plus récentes</option><option value="title">Titre A–Z</option><option value="time">Plus rapides</option></select>
+        <span role="status">{filtered.length} / {recipes.length} recette(s)</span>
+      </div>
+      {selectedTags.length > 0 && <div className="flex gap-2 overflow-x-auto pb-1">{selectedTags.map((tag) => <button type="button" key={tag} aria-label={`Retirer le tag ${tag}`} onClick={() => toggle(tag)} className="flex shrink-0 items-center gap-1 rounded-full border px-3 py-1 text-xs">{tag}<X className="h-3 w-3" /></button>)}</div>}
+      {(search || maxTime !== null || selectedTags.length > 0) && <Button variant="ghost" size="sm" onClick={reset}>Réinitialiser les filtres</Button>}
+    </section>
   );
 }
