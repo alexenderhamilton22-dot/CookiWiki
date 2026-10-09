@@ -1,16 +1,29 @@
 import { useState, useCallback, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
+import { useMemo } from 'react';
+import { usePersonalRecipes } from '@/hooks/usePersonalRecipes';
+import { Button } from '@/components/ui/button';
 import Header from '@/components/Header';
 import RecipeCard from '@/components/RecipeCard';
 import RecipeFilters from '@/components/RecipeFilters';
 import { useRecipes } from '@/hooks/useRecipes';
 import { Loader2, BookOpen } from 'lucide-react';
 import type { Recipe } from '@/types/recipe';
+import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
 
 const Index = () => {
-  const { recipes, loading, refetch } = useRecipes();
+  const { user } = useAuth();
+  const { recipes, loading, error, refetch } = useRecipes();
+  const personal = usePersonalRecipes();
+  const [scope, setScope] = useState('all');
+  const scoped = useMemo(() => {
+    if (!user || scope === 'all') return recipes;
+    if (scope === 'favorites') return recipes.filter((r) => personal.records.some((p) => p.recipe_id === r.id && p.is_favorite));
+    const viewed = new Map(personal.records.filter((p) => p.last_viewed_at).map((p) => [p.recipe_id, p.last_viewed_at!]));
+    return recipes.filter((r) => viewed.has(r.id)).sort((a, b) => viewed.get(b.id)!.localeCompare(viewed.get(a.id)!));
+  }, [recipes, user, scope, personal.records]);
   const [filtered, setFiltered] = useState<Recipe[]>([]);
   const listRef = useRef<HTMLDivElement | null>(null);
   const navigate = useNavigate();
@@ -19,14 +32,13 @@ const Index = () => {
 
   const handleDelete = useCallback(
     async (id: string) => {
-      console.log("Tentative de suppression de l'ID :", id);
-      const confirmed = window.confirm('Voulez-vous vraiment supprimer cette recette ?');
+      const confirmed = window.confirm('Mettre cette recette dans la corbeille ? Elle pourra être restaurée si l’historique est activé.');
       if (!confirmed) return;
 
-      const { error } = await supabase.from('recipes').delete().eq('id', id);
-      if (error) {
+      const { data, error } = await supabase.rpc('trash_recipe', { target_recipe: id });
+      if (error || !data) {
         console.error('Erreur Supabase lors de la suppression :', error);
-        toast.error("Impossible de supprimer la recette.");
+        toast.error('Impossible de mettre la recette dans la corbeille. Elle est conservée.');
         return;
       }
       toast.success('Recette supprimée.');
@@ -40,44 +52,24 @@ const Index = () => {
     <div className="min-h-screen bg-emerald-50">
       <Header />
       <main className="container py-6 space-y-6">
-        <section className="space-y-3 rounded-xl border border-amber-100 bg-[#fffdf8] px-4 py-5 shadow-sm sm:px-6">
-          <div className="flex items-start gap-3">
-            <div className="mt-1 hidden rounded-full bg-amber-100 p-2 text-amber-700 sm:inline-flex">
-              <BookOpen className="h-5 w-5" />
-            </div>
-            <div className="space-y-2 text-center sm:text-left">
-              <h1 className="font-serif text-2xl sm:text-3xl font-semibold tracking-[0.18em] uppercase text-amber-700">
-                Le Grimoire Numérique de MAMIFA
-              </h1>
-              <p className="text-sm text-slate-700 leading-relaxed">
-                CookiWiki est bien plus qu&apos;une base de données. C&apos;est le sanctuaire des secrets culinaires de MAMIFA,
-                où la tradition des vieux grimoires rencontre l&apos;intelligence de demain. Que ce soit une page jaunie
-                d&apos;un vieux carnet, un PDF oublié sur un disque dur ou une capture d&apos;écran prise à la volée, notre IA
-                s&apos;occupe de tout pour que vous ne gardiez que le meilleur&nbsp;: le plaisir de cuisiner et de partager.
-              </p>
-            </div>
-          </div>
-          <div className="flex items-center justify-between border-t border-amber-100 pt-3">
-            <span className="text-xs text-muted-foreground">
-              Parce que les meilleures recettes ne devraient jamais s&apos;égarer.
-            </span>
-            {recipes.length === 0 && (
-              <button
-                type="button"
-                onClick={() => listRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
-                className="ml-3 inline-flex items-center gap-2 rounded-full border border-amber-300 bg-amber-50 px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.16em] text-amber-700 shadow-sm hover:bg-amber-100"
-              >
-                <BookOpen className="h-3.5 w-3.5" />
-                <span>Ouvrir le Grimoire</span>
-              </button>
-            )}
-          </div>
+        <section className="flex items-center gap-3">
+          <BookOpen className="h-6 w-6 text-amber-700 shrink-0" />
+          <div><h1 className="font-serif text-2xl font-semibold text-amber-700">Le Grimoire de MAMIFA</h1>
+          <p className="text-sm text-muted-foreground">Vos recettes à retrouver, cuisiner et partager. <span className="ml-1 inline-block rounded-full border px-2 py-0.5 text-xs whitespace-nowrap" aria-label={`Version ${__COOKIWIKI_VERSION__}`}>v{__COOKIWIKI_VERSION__}</span></p></div>
+          {!loading && !error && <span className="ml-auto text-sm font-semibold text-primary whitespace-nowrap">{recipes.length} recettes</span>}
         </section>
 
-        <RecipeFilters recipes={recipes} onFiltered={handleFiltered} />
+        {user && <div className="flex flex-wrap gap-2" aria-label="Bibliothèque personnelle">
+          <Button size="sm" variant={scope === 'all' ? 'default' : 'outline'} onClick={() => setScope('all')}>Toutes</Button>
+          <Button size="sm" variant={scope === 'favorites' ? 'default' : 'outline'} onClick={() => setScope('favorites')}>Favoris ({personal.records.filter((p) => p.is_favorite && recipes.some((r) => r.id === p.recipe_id)).length})</Button>
+          <Button size="sm" variant={scope === 'recent' ? 'default' : 'outline'} onClick={() => setScope('recent')}>Consultées récemment</Button>
+          <Button size="sm" variant="ghost" asChild><Link to="/corbeille">Corbeille</Link></Button>
+        </div>}
+        {user && personal.error && <p role="alert" className="text-sm">{personal.error} <button className="underline" onClick={() => void personal.refresh()}>Réessayer</button></p>}
+        <RecipeFilters recipes={scoped} libraryRecipes={recipes} onFiltered={handleFiltered} />
 
         <div ref={listRef}>
-          {loading ? (
+          {error ? <div role="alert" className="text-center py-8">{error}<button className="block mx-auto underline mt-2" onClick={() => void refetch()}>Réessayer</button></div> : loading ? (
             <div className="flex justify-center py-12">
               <Loader2 className="h-8 w-8 animate-spin text-primary" />
             </div>
@@ -86,7 +78,7 @@ const Index = () => {
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {filtered.map((r) => (
-                <RecipeCard key={r.id} recipe={r} onDelete={handleDelete} />
+                <RecipeCard key={r.id} recipe={r} onDelete={user ? handleDelete : undefined} favorite={personal.records.some((p) => p.recipe_id === r.id && p.is_favorite)} onFavorite={user ? () => void personal.toggleFavorite(r.id, !personal.records.some((p) => p.recipe_id === r.id && p.is_favorite)) : undefined} />
               ))}
             </div>
           )}
