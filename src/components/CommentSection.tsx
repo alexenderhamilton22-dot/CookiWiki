@@ -55,7 +55,7 @@ export default function CommentSection({ recipeId }: { recipeId: string }) {
     lock.current = true;
     setSending(true); setSendError(''); setSent(false);
     try {
-      const { error } = await supabase.from('comments').insert({ recipe_id: recipeId, author_id: user.id, content });
+      const { error } = await supabase.from('comments').insert({ recipe_id: recipeId, user_id: user.id, content });
       if (error) throw error;
       if (activeRecipe.current !== recipeId) return;
       setNewComment(''); setSent(true);
@@ -76,8 +76,8 @@ export default function CommentSection({ recipeId }: { recipeId: string }) {
       {comments.map((c) => (
         <article key={c.id} className="rounded-lg bg-muted/50 p-3 space-y-1">
           <div className="flex items-center justify-between gap-2">
-            <span className="text-sm font-semibold">{c.profiles?.username || (c.author_id === user?.id ? user.user_metadata?.username || 'Vous' : 'Membre')}</span>
-            <span className="text-xs text-muted-foreground">{Number.isNaN(Date.parse(c.created_at)) ? '' : formatDistanceToNow(new Date(c.created_at), { addSuffix: true, locale: fr })}</span>
+            <span className="text-sm font-semibold">{c.profiles?.username || (c.user_id === user?.id ? user.user_metadata?.username || 'Vous' : 'Membre')}</span>
+            <span className="text-xs text-muted-foreground">{!c.created_at || Number.isNaN(Date.parse(c.created_at)) ? '' : formatDistanceToNow(new Date(c.created_at), { addSuffix: true, locale: fr })}</span>
           </div>
           <p className="text-sm whitespace-pre-wrap break-words">{c.content}</p>
         </article>
@@ -86,7 +86,10 @@ export default function CommentSection({ recipeId }: { recipeId: string }) {
         <form onSubmit={handleSubmit} className="space-y-2">
           <label htmlFor={`comment-${recipeId}`} className="text-sm font-medium">Votre commentaire</label>
           <Textarea id={`comment-${recipeId}`} value={newComment} disabled={sending} maxLength={5000} onChange={(e) => { setNewComment(e.target.value); setSent(false); }} placeholder="Une astuce, une variante, votre avis…" className="min-h-[90px] bg-card" />
-          {sendError && <p role="alert" className="text-sm text-destructive">{sendError} Votre texte est conservé.</p>}
+          {sendError && <div className="space-y-1">
+            <p role="alert" className="text-sm text-destructive">{sendError}</p>
+            <p className="text-sm text-muted-foreground">Votre texte est conservé.</p>
+          </div>}
           {sent && <p role="status" className="text-sm text-primary">Commentaire envoyé.</p>}
           <Button type="submit" disabled={sending || !newComment.trim()}>{sending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}{sending ? 'Envoi…' : 'Publier le commentaire'}</Button>
         </form>

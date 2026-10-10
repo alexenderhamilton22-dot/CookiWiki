@@ -28,9 +28,9 @@ export interface Profile {
 
 export interface Comment {
   id: string;
-  recipe_id: string;
-  author_id: string;
+  recipe_id: string | null;
+  user_id: string | null;
   content: string;
-  created_at: string;
+  created_at: string | null;
   profiles?: Profile;
 }
