@@ -1,7 +1,7 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { createClient } from '@supabase/supabase-js';
-import { analysisInput, performAnalysis } from '../server/analyze';
-import { RecipeAnalysisError } from '../src/lib/recipeAnalysis';
+import { analysisInput, performAnalysis } from '../server/analyze.js';
+import { RecipeAnalysisError } from '../src/lib/recipeAnalysis.js';
 
 export const config = { maxDuration: 60 };
 export type ApiRequest = IncomingMessage & { body?: unknown };

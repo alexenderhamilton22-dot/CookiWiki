@@ -4,7 +4,7 @@ import { request as httpsRequest } from 'node:https';
 import { request as httpRequest } from 'node:http';
 import ipaddr from 'ipaddr.js';
 import { load } from 'cheerio';
-import { RecipeAnalysisError } from '../src/lib/recipeAnalysis';
+import { RecipeAnalysisError } from '../src/lib/recipeAnalysis.js';
 
 export function isPublicAddress(address: string): boolean {
   try {

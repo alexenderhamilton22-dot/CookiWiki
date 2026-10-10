@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { AnalyzedRecipe } from '../types/analysis';
+import type { AnalyzedRecipe } from '../types/analysis.js';
 
 export type AnalysisSource = 'photo' | 'url' | 'text';
 export type AnalysisErrorCode = 'NOT_CONFIGURED' | 'NO_RECIPE_FOUND' | 'INVALID_RESPONSE' | 'INCOMPLETE_RESPONSE' | 'UNREADABLE_FILE' | 'INVALID_FILE' | 'INVALID_URL' | 'MISSING_INPUT' | 'SESSION_EXPIRED' | 'RATE_LIMITED' | 'PROVIDER_ACCESS' | 'SERVICE_UNAVAILABLE' | 'ANALYSIS_TIMEOUT' | 'SOURCE_UNAVAILABLE' | 'RESPONSE_BLOCKED';

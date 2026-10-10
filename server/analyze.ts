@@ -1,6 +1,6 @@
 import { z } from 'zod';
-import { parseAnalyzedRecipe, RecipeAnalysisError } from '../src/lib/recipeAnalysis';
-import { fetchSourcePage, validateSourceUrl } from './source';
+import { parseAnalyzedRecipe, RecipeAnalysisError } from '../src/lib/recipeAnalysis.js';
+import { fetchSourcePage, validateSourceUrl } from './source.js';
 
 export const analysisInput = z.discriminatedUnion('source', [
   z.object({ source: z.literal('text'), text: z.string().trim().min(50).max(30000) }),
